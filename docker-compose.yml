@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: permissions_saas
+      POSTGRES_USER: saas
+      POSTGRES_PASSWORD: saas123
+    ports:
+      - "5432:5432"
+    volumes:
+      - permission_saas_pgdata:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas -d permissions_saas"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/permissions_saas
+      SPRING_DATASOURCE_USERNAME: saas
+      SPRING_DATASOURCE_PASSWORD: saas123
+    ports:
+      - "8080:8080"
+      - "5005:5005"
+    develop:
+      watch:
+        - action: rebuild
+          path: ./src
+        - action: rebuild
+          path: ./pom.xml
+
+
+volumes:
+  permission_saas_pgdata:
