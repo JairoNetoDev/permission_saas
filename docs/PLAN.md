@@ -16,6 +16,7 @@ A estratégia é implementar **uma fatia vertical** do sistema — pequena, mas 
 atravesse várias camadas e módulos, e que **roda de ponta a ponta**.
 
 ### ✅ Entra no projeto acadêmico
+
 - Cadastro de Cliente (US01, simplificado)
 - Escolha/assinatura de Plano com geração de API Key (US02–US04, pagamento **simulado**)
 - Criação de Projeto/Cargo/Rota respeitando limite do plano (US06–US08)
@@ -23,6 +24,7 @@ atravesse várias camadas e módulos, e que **roda de ponta a ponta**.
 - Log de auditoria simples (EP05)
 
 ### ❌ Fica de fora (citar como "trabalho futuro" no relatório)
+
 - Gateway de pagamento real
 - Autenticação/JWT completos, login do painel
 - Exportação CSV/JSON
@@ -91,13 +93,13 @@ arquitetura em camadas para a Parte 3 da rubrica.
 A boa notícia: com esse desenho, **os 5 princípios saem quase "de graça"** —
 você só precisa saber apontá-los no relatório.
 
-| Princípio | Onde aplicar | Por quê |
-|---|---|---|
-| **SRP** | Cada `UseCase` faz uma coisa só (ex: `RegisterClientUseCase` só cadastra; não envia e-mail, não audita) | Uma única razão para mudar |
-| **OCP** | `PermissionValidationHandler` (chain) e `PaymentGateway` (interface) — novo handler/gateway sem alterar os existentes | Extensão sem modificação |
-| **LSP** | Qualquer handler da chain ou listener de auditoria pode substituir outro do mesmo tipo sem quebrar o fluxo | Substituibilidade garantida |
-| **ISP** | Interfaces pequenas: `PaymentGateway` só tem `process()`, `PermissionEventListener` só tem `onValidated()` | Ninguém implementa método que não usa |
-| **DIP** | `UseCases` dependem de interfaces (`ClientRepository`, `PaymentGateway`), nunca de classes JPA concretas | Domínio não conhece infraestrutura |
+| Princípio    | Onde aplicar                                                                                                               | Por quê                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **SRP** | Cada`UseCase` faz uma coisa só (ex: `RegisterClientUseCase` só cadastra; não envia e-mail, não audita)             | Uma única razão para mudar             |
+| **OCP** | `PermissionValidationHandler` (chain) e `PaymentGateway` (interface) — novo handler/gateway sem alterar os existentes | Extensão sem modificação              |
+| **LSP** | Qualquer handler da chain ou listener de auditoria pode substituir outro do mesmo tipo sem quebrar o fluxo                 | Substituibilidade garantida              |
+| **ISP** | Interfaces pequenas:`PaymentGateway` só tem `process()`, `PermissionEventListener` só tem `onValidated()`        | Ninguém implementa método que não usa |
+| **DIP** | `UseCases` dependem de interfaces (`ClientRepository`, `PaymentGateway`), nunca de classes JPA concretas             | Domínio não conhece infraestrutura     |
 
 A instrução pede "2 ou mais", mas a rubrica avalia os 5 — vale a pena documentar
 todos, já que o desenho já cobre isso.
@@ -106,13 +108,13 @@ todos, já que o desenho já cobre isso.
 
 ## 🎨 Mapeamento dos Padrões GoF (mínimo 1 criacional + 1 estrutural + 1 comportamental)
 
-| Padrão | Categoria | Onde | Objetivo |
-|---|---|---|---|
-| **Factory Method** (`ApiKeyFactory`) | Criacional | `billing` | Centraliza a criação da chave de API; permite trocar a estratégia de geração (UUID hoje, JWT no futuro) sem afetar quem consome |
-| **Builder** (`ProjectBuilder`) | Criacional | `project` | Monta um `Project` complexo (com Roles e Routes) passo a passo, evitando construtor telescópico |
-| **Adapter** (`FakePaymentGatewayAdapter`) | Estrutural | `billing` | Adapta o formato de um gateway de pagamento externo (simulado) para a interface interna `PaymentGateway` |
-| **Chain of Responsibility** | Comportamental | `permission` | Cada handler valida sua parte (API Key → Token → Role/Rota) e passa adiante — adicionar nova regra não toca nas existentes |
-| **Observer** (`AuditLogListener`) | Comportamental | `audit` | Desacopla "o que acontece na validação" de "quem precisa saber disso" (auditoria) |
+| Padrão                                           | Categoria      | Onde           | Objetivo                                                                                                                             |
+| ------------------------------------------------- | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Factory Method** (`ApiKeyFactory`)      | Criacional     | `billing`    | Centraliza a criação da chave de API; permite trocar a estratégia de geração (UUID hoje, JWT no futuro) sem afetar quem consome |
+| **Builder** (`ProjectBuilder`)            | Criacional     | `project`    | Monta um`Project` complexo (com Roles e Routes) passo a passo, evitando construtor telescópico                                    |
+| **Adapter** (`FakePaymentGatewayAdapter`) | Estrutural     | `billing`    | Adapta o formato de um gateway de pagamento externo (simulado) para a interface interna`PaymentGateway`                            |
+| **Chain of Responsibility**                 | Comportamental | `permission` | Cada handler valida sua parte (API Key → Token → Role/Rota) e passa adiante — adicionar nova regra não toca nas existentes       |
+| **Observer** (`AuditLogListener`)         | Comportamental | `audit`      | Desacopla "o que acontece na validação" de "quem precisa saber disso" (auditoria)                                                  |
 
 Você terá **2 criacionais + 1 estrutural + 2 comportamentais** — passa da exigência
 mínima com folga, te dando margem se algum não saí perfeito.
@@ -144,11 +146,13 @@ Isso resolve de uma vez 3-4 itens da rubrica que um código limpo "direto" não 
 > ajustar nomes e testar** — não para digitar tudo do zero.
 
 ### Dia 1 — Sáb 27/06 — Setup do ambiente
-- [ ] Criar repositório Git
-- [ ] Gerar projeto Spring Boot (Java 21 / Web, Data JPA, PostgreSQL Driver, Validation)
-- [ ] Criar a estrutura de pacotes modular (acima)
-- [ ] Criar `docker-compose.yml` com Postgres (modelo abaixo)
-- [ ] Validar: app sobe e conecta no banco (endpoint simples `GET /ping`)
+
+- [X] Criar repositório Git
+- [X] Gerar projeto Spring Boot (Java 21 / Web, Data JPA, PostgreSQL Driver, Validation)
+- [X] Criar a estrutura de pacotes modular (acima)
+- [X] Criar `docker-compose.yml` com Postgres (modelo abaixo)
+- [X] Validar: app sobe e conecta no banco (endpoint simples `GET /ping`)
+
 - *(fora da 1h, quando puder)*: adaptar o texto do "Estudo de Caso" que você já tem para a seção de Descrição do Projeto
 
 **Prompt Claude Code:** *"Crie um projeto Spring Boot 3 com Java 21, dependências
@@ -157,47 +161,55 @@ um endpoint GET /ping em um controller no pacote shared, e um docker-compose com
 Postgres 16."*
 
 ### Dia 2 — Dom 28/06 — Módulo Identity (Cliente)
-- [ ] Entidade `Client` (domain) com validações básicas
-- [ ] Interface `ClientRepository` (porta) + `JpaClientRepository` (adapter)
-- [ ] `RegisterClientUseCase` (SRP)
-- [ ] Endpoint `POST /clients` testado via curl/Postman
+
+- [X] Entidade `Client` (domain) com validações básicas
+- [X] Interface `ClientRepository` (porta) + `JpaClientRepository` (adapter)
+- [X] `RegisterClientUseCase` (SRP)
+- [X] Endpoint `POST /clients` testado via curl/Postman
 
 ### Dia 3 — Seg 29/06 — Módulo Billing: Factory + Adapter
+
 - [ ] Entidades `Plan`, `Subscription`
 - [ ] Interface `PaymentGateway` + `FakePaymentGatewayAdapter` (Adapter)
 - [ ] `ApiKeyFactory` (Factory Method)
 - [ ] `SubscribeToPlanUseCase` orquestrando os três
 
 ### Dia 4 — Ter 30/06 — Módulo Project: Builder
+
 - [ ] Entidades `Project`, `Role`, `Route`
 - [ ] `ProjectBuilder` (Builder)
 - [ ] `PlanLimitValidator` (respeita `max_projects` do plano — bom exemplo de OCP)
 - [ ] `CreateProjectUseCase`
 
 ### Dia 5 — Qua 01/07 — 🔑 Middleware de validação: Chain of Responsibility
+
 - [ ] Interface `PermissionValidationHandler`
 - [ ] 3 handlers concretos encadeados: ApiKey → Token → Role/Rota
 - [ ] Endpoint `POST /validate-permission`
 - [ ] **Este é o módulo mais importante para o professor testar isoladamente** — garanta que roda sozinho, com dados simples em memória se precisar
 
 ### Dia 6 — Qui 02/07 — Auditoria (Observer) + Docker ponta a ponta
+
 - [ ] Interface `PermissionEventListener` + `AuditLogListener` (Observer)
 - [ ] Notificação disparada após cada validação de permissão
 - [ ] Ajustar `Dockerfile` multi-stage (modelo abaixo)
 - [ ] Validar `docker compose up` completo: app + Postgres + endpoints respondendo
 
 ### Dia 7 — Sex 03/07 — Documentação SOLID + Padrões
+
 - [ ] Para cada princípio SOLID: destacar trecho, nome, objetivo, explicação
 - [ ] Para cada padrão GoF: destacar trecho, nome, objetivo, explicação
 - [ ] Escrever a seção "antes/depois" do `SubscribeToPlanUseCase`
 - [ ] Escrever os parágrafos sobre **importância** do Clean Code e dos Patterns no ciclo de vida do projeto (a rubrica pede isso explicitamente, não só código)
 
 ### Dia 8 — Sáb 04/07 — Polimento Clean Code
+
 - [ ] Revisar nomes (vocabulário do domínio), tamanho de função, máx. 2 parâmetros/função
 - [ ] Remover comentários desnecessários, padronizar formatação/indentação
 - [ ] Atualizar README com instruções de `docker compose up`
 
 ### Dia 9 — Dom 05/07 — Entrega final
+
 - [ ] Consolidar PDF: Descrição do Projeto + Parte 1 (Clean Code) + Parte 2 (SOLID) + Parte 3 (GoF) + anexo/link do código
 - [ ] Nomear arquivo: `JairoWilliamsGuedesLopesNeto_CleanCodeEPadroesDeProjeto_pd.pdf`
 - [ ] Checar a checklist da rubrica abaixo
@@ -239,6 +251,7 @@ volumes:
 ```
 
 **Dockerfile (multi-stage)**
+
 ```dockerfile
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
@@ -258,18 +271,18 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 ## ✅ Checklist final mapeado à rubrica
 
-| Item da rubrica | Onde você atende |
-|---|---|
-| Pilares de OO / encapsulamento | Entidades ricas (não anêmicas) em `domain` |
-| Identificar classes não coesas / refatorar | Seção "antes/depois" do `SubscribeToPlanUseCase` |
-| 5 princípios SOLID aplicados | Tabela de mapeamento SOLID acima |
-| Importância do Clean Code no ciclo de vida | Parágrafo introdutório da Parte 1 |
-| Bad smells e pilares do Refactoring | Seção "antes/depois" |
-| Importância dos Design Patterns | Parágrafo introdutório da Parte 3 |
-| 1 criacional + 1 estrutural + 1 comportamental | Factory/Builder + Adapter + Chain/Observer |
-| Código adaptável (novas classes sem afetar existentes) | OCP via interfaces (handlers, gateway) |
-| Arquitetura em camadas | Estrutura modular `domain/application/infrastructure/api` |
-| Integração com APIs de terceiros | `PaymentGateway` (Adapter) simulando gateway externo |
+| Item da rubrica                                          | Onde você atende                                          |
+| -------------------------------------------------------- | ---------------------------------------------------------- |
+| Pilares de OO / encapsulamento                           | Entidades ricas (não anêmicas) em`domain`              |
+| Identificar classes não coesas / refatorar              | Seção "antes/depois" do`SubscribeToPlanUseCase`        |
+| 5 princípios SOLID aplicados                            | Tabela de mapeamento SOLID acima                           |
+| Importância do Clean Code no ciclo de vida              | Parágrafo introdutório da Parte 1                        |
+| Bad smells e pilares do Refactoring                      | Seção "antes/depois"                                     |
+| Importância dos Design Patterns                         | Parágrafo introdutório da Parte 3                        |
+| 1 criacional + 1 estrutural + 1 comportamental           | Factory/Builder + Adapter + Chain/Observer                 |
+| Código adaptável (novas classes sem afetar existentes) | OCP via interfaces (handlers, gateway)                     |
+| Arquitetura em camadas                                   | Estrutura modular`domain/application/infrastructure/api` |
+| Integração com APIs de terceiros                       | `PaymentGateway` (Adapter) simulando gateway externo     |
 
 ---
 
