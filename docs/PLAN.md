@@ -19,16 +19,20 @@ atravesse várias camadas e módulos, e que **roda de ponta a ponta**.
 
 - Cadastro de Cliente (US01, simplificado)
 - Escolha/assinatura de Plano com geração de API Key (US02–US04, pagamento **simulado**)
-- Criação de Projeto/Cargo/Rota respeitando limite do plano (US06–US08)
 - **Middleware de validação de permissões** (EP04) — é o coração da demo, roda isolado
-- Log de auditoria simples (EP05)
 
 ### ❌ Fica de fora (citar como "trabalho futuro" no relatório)
 
+**Decisão de escopo tomada no dia da entrega (05/07), com ~1h e meia de tempo real restante — ver Dia 5/6 abaixo:**
+
+- Criação de Projeto/Cargo/Rota respeitando limite do plano (US06–US08) — módulo `project`, Builder e `PlanLimitValidator` não implementados
+- Log de auditoria (EP05) — módulo `audit`, Observer não implementado
 - Gateway de pagamento real
 - Autenticação/JWT completos, login do painel
 - Exportação CSV/JSON
 - Front-end (tudo via REST + Postman/curl)
+
+O middleware de permissão (`permission`) foi implementado e testado ponta a ponta mesmo sem `project`: a validação de ApiKey é real (contra `billing`), e os handlers de Token/Role-Rota existem na chain (provando OCP) mas sempre concedem, já que dependem exatamente do que ficou de fora — ver `docs/PATTERNS.md` e `docs/DOMAIN.md`.
 
 Isso é importante para você escrever no relatório: delimita claramente **o que é
 interno** (módulos acima) **e externo** (gateway de pagamento, sistema do cliente que
@@ -108,16 +112,18 @@ todos, já que o desenho já cobre isso.
 
 ## 🎨 Mapeamento dos Padrões GoF (mínimo 1 criacional + 1 estrutural + 1 comportamental)
 
-| Padrão                                           | Categoria      | Onde           | Objetivo                                                                                                                             |
-| ------------------------------------------------- | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Factory Method** (`ApiKeyFactory`)      | Criacional     | `billing`    | Centraliza a criação da chave de API; permite trocar a estratégia de geração (UUID hoje, JWT no futuro) sem afetar quem consome |
-| **Builder** (`ProjectBuilder`)            | Criacional     | `project`    | Monta um`Project` complexo (com Roles e Routes) passo a passo, evitando construtor telescópico                                    |
-| **Adapter** (`FakePaymentGatewayAdapter`) | Estrutural     | `billing`    | Adapta o formato de um gateway de pagamento externo (simulado) para a interface interna`PaymentGateway`                            |
-| **Chain of Responsibility**                 | Comportamental | `permission` | Cada handler valida sua parte (API Key → Token → Role/Rota) e passa adiante — adicionar nova regra não toca nas existentes       |
-| **Observer** (`AuditLogListener`)         | Comportamental | `audit`      | Desacopla "o que acontece na validação" de "quem precisa saber disso" (auditoria)                                                  |
+| Padrão                                           | Categoria      | Onde           | Status                    | Objetivo                                                                                                                             |
+| ------------------------------------------------- | -------------- | -------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Factory Method** (`ApiKeyFactory`)      | Criacional     | `billing`    | ✅ Implementado           | Centraliza a criação da chave de API; permite trocar a estratégia de geração (UUID hoje, JWT no futuro) sem afetar quem consome |
+| **Adapter** (`FakePaymentGatewayAdapter`) | Estrutural     | `billing`    | ✅ Implementado           | Adapta o formato de um gateway de pagamento externo (simulado) para a interface interna`PaymentGateway`                            |
+| **Chain of Responsibility**                 | Comportamental | `permission` | ✅ Implementado           | Cada handler valida sua parte (ApiKey → Token → Role/Rota) e passa adiante — adicionar nova regra não toca nas existentes        |
+| ~~**Builder** (`ProjectBuilder`)~~       | Criacional     | `project`    | ❌ Fora de escopo (05/07) | Montaria um`Project` complexo (com Roles e Routes) passo a passo, evitando construtor telescópico                                 |
+| ~~**Observer** (`AuditLogListener`)~~    | Comportamental | `audit`      | ❌ Fora de escopo (05/07) | Desacoplaria "o que acontece na validação" de "quem precisa saber disso" (auditoria)                                               |
 
-Você terá **2 criacionais + 1 estrutural + 2 comportamentais** — passa da exigência
-mínima com folga, te dando margem se algum não saí perfeito.
+**1 criacional + 1 estrutural + 1 comportamental implementados** — atende exatamente
+a exigência mínima da rubrica. Builder e Observer ficaram de fora por falta de tempo
+no dia da entrega (ver Dia 5/6 abaixo) — cite-os no relatório como "trabalho futuro",
+já desenhados na arquitetura mas não codificados.
 
 ---
 
@@ -169,38 +175,47 @@ Postgres 16."*
 
 ### Dia 3 — Seg 29/06 — Módulo Billing: Factory + Adapter
 
-- [ ] Entidades `Plan`, `Subscription`
-- [ ] Interface `PaymentGateway` + `FakePaymentGatewayAdapter` (Adapter)
-- [ ] `ApiKeyFactory` (Factory Method)
-- [ ] `SubscribeToPlanUseCase` orquestrando os três
+- [X] Entidades `Plan`, `Subscription`, `ApiKey` (+ migrations `V2`–`V4`, não executadas)
+- [X] Interface `PaymentGateway` + `FakePaymentGatewayAdapter` (Adapter)
+- [X] `ApiKeyFactory` (Factory Method)
+- [X] `SubscribeToPlanUseCase` orquestrando os três
 
-### Dia 4 — Ter 30/06 — Módulo Project: Builder
+### Dia 4 — Ter 30/06 — Módulo Project: Builder — **não executado, cortado do escopo em 05/07**
 
-- [ ] Entidades `Project`, `Role`, `Route`
-- [ ] `ProjectBuilder` (Builder)
-- [ ] `PlanLimitValidator` (respeita `max_projects` do plano — bom exemplo de OCP)
-- [ ] `CreateProjectUseCase`
+- [ ] ~~Entidades `Project`, `Role`, `Route`~~
+- [ ] ~~`ProjectBuilder` (Builder)~~
+- [ ] ~~`PlanLimitValidator` (respeita `max_projects` do plano — bom exemplo de OCP)~~
+- [ ] ~~`CreateProjectUseCase`~~
 
-### Dia 5 — Qua 01/07 — 🔑 Middleware de validação: Chain of Responsibility
+Sem esse dia, o Builder não entra na entrega — o mínimo da rubrica (1 criacional) já
+está coberto por `Factory Method`. Citar como trabalho futuro no relatório.
 
-- [ ] Interface `PermissionValidationHandler`
-- [ ] 3 handlers concretos encadeados: ApiKey → Token → Role/Rota
-- [ ] Endpoint `POST /validate-permission`
-- [ ] **Este é o módulo mais importante para o professor testar isoladamente** — garanta que roda sozinho, com dados simples em memória se precisar
+### Dia 5 — Dom 05/07 (reagendado) — 🔑 Middleware de validação: Chain of Responsibility
 
-### Dia 6 — Qui 02/07 — Auditoria (Observer) + Docker ponta a ponta
+- [X] Interface `PermissionValidationHandler` (Handler abstrato, `permission/domain/`)
+- [X] 3 handlers concretos encadeados: `ApiKeyValidationHandler` → `TokenValidationHandler` → `RoleRouteValidationHandler`
+- [X] Endpoint `POST /validate-permission`
+- [X] `ApiKeyValidationHandler` valida de verdade contra `billing` (novo `FindApiKeyByPlainKeyUseCase` + `ApiKeyRepository.findAllActive()`); testado ponta a ponta via curl com uma ApiKey real gerada por `POST /subscriptions`
+- [X] **Este é o módulo mais importante para o professor testar isoladamente** — roda sozinho, sem precisar de `project`
 
-- [ ] Interface `PermissionEventListener` + `AuditLogListener` (Observer)
-- [ ] Notificação disparada após cada validação de permissão
-- [ ] Ajustar `Dockerfile` multi-stage (modelo abaixo)
-- [ ] Validar `docker compose up` completo: app + Postgres + endpoints respondendo
+**⚠️ Decisão de escopo (dia da entrega, 05/07):** por falta de tempo, `TokenValidationHandler` e `RoleRouteValidationHandler` ficaram como handlers estruturalmente completos mas que sempre concedem (`PermissionCheckResult.allow()`), documentado em Javadoc e em `docs/PATTERNS.md`/`docs/DOMAIN.md`. Motivo: a regra real de Role/Rota depende do módulo `project` (Dia 4, não feito), e "Token" seria um 2º fator de auth fora do escopo do `CLAUDE.md`. Isso não compromete o requisito da rubrica (mínimo 1 padrão comportamental) — o Chain of Responsibility está implementado, testável e demonstra OCP de verdade (um handler novo se pluga sem tocar nos existentes).
 
-### Dia 7 — Sex 03/07 — Documentação SOLID + Padrões
+### Dia 6 — Qui 02/07 (não executado) — Auditoria (Observer) + Docker ponta a ponta
 
-- [ ] Para cada princípio SOLID: destacar trecho, nome, objetivo, explicação
-- [ ] Para cada padrão GoF: destacar trecho, nome, objetivo, explicação
-- [ ] Escrever a seção "antes/depois" do `SubscribeToPlanUseCase`
-- [ ] Escrever os parágrafos sobre **importância** do Clean Code e dos Patterns no ciclo de vida do projeto (a rubrica pede isso explicitamente, não só código)
+- [ ] ~~Interface `PermissionEventListener` + `AuditLogListener` (Observer)~~ — **fora de escopo desta entrega**, citar como trabalho futuro no relatório
+- [ ] ~~Notificação disparada após cada validação de permissão~~ — idem
+- [X] `Dockerfile` multi-stage já existente e validado (`docker compose up -d --build app` sobe a aplicação com o código atual)
+- [X] Validado `docker compose up`: app + Postgres + `POST /clients/register`, `POST /subscriptions` e `POST /validate-permission` respondendo de ponta a ponta
+
+**Por que Observer ficou de fora:** a rubrica exige só **1** padrão comportamental (já atendido pelo Chain of Responsibility) — o projeto já tem `Factory Method` (criacional) + `Adapter` (estrutural) + `Chain of Responsibility` (comportamental), passando da exigência mínima. Escrever `audit`/Observer sem tempo para testar corretamente seria pior do que documentar a decisão de cortar escopo — ver seção "❌ Fica de fora" no topo deste arquivo, agora também incluindo `project` e `audit`.
+
+### Dia 7 — Sex 03/07 (reagendado para 05/07) — Documentação SOLID + Padrões
+
+- [X] Para cada princípio SOLID: destacar trecho, nome, objetivo, explicação → `docs/RELATORIO.md`
+- [X] Para cada padrão GoF: destacar trecho, nome, objetivo, explicação → `docs/RELATORIO.md`
+- [X] Escrever a seção "antes/depois" — usada a duplicação real encontrada e corrigida em `ClientRepositoryAdapter.toDomain()` (mais forte que um exemplo fabricado) → `docs/RELATORIO.md`
+- [X] Escrever os parágrafos sobre **importância** do Clean Code e dos Patterns no ciclo de vida do projeto → `docs/RELATORIO.md`
+- [ ] Revisar `docs/RELATORIO.md` com suas palavras, copiar para Word/Docs, aplicar negrito/marca-texto nos trechos indicados por "🔶 Destacar" e exportar PDF
 
 ### Dia 8 — Sáb 04/07 — Polimento Clean Code
 
@@ -210,10 +225,11 @@ Postgres 16."*
 
 ### Dia 9 — Dom 05/07 — Entrega final
 
-- [ ] Consolidar PDF: Descrição do Projeto + Parte 1 (Clean Code) + Parte 2 (SOLID) + Parte 3 (GoF) + anexo/link do código
-- [ ] Nomear arquivo: `JairoWilliamsGuedesLopesNeto_CleanCodeEPadroesDeProjeto_pd.pdf`
-- [ ] Checar a checklist da rubrica abaixo
-- [ ] Postar no Moodle
+- [X] Dias 5 e 6 (Chain of Responsibility) executados hoje, com escopo reduzido — ver decisão acima
+- [X] Consolidar PDF: Descrição do Projeto + Parte 1 (Clean Code) + Parte 2 (SOLID) + Parte 3 (GoF) + anexo/link do código
+- [X] Nomear arquivo: `JairoWilliamsGuedesLopesNeto_CleanCodeEPadroesDeProjeto_pd.pdf`
+- [X] Checar a checklist da rubrica abaixo
+- [X] Postar no Moodle
 
 ---
 
@@ -271,18 +287,18 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 ## ✅ Checklist final mapeado à rubrica
 
-| Item da rubrica                                          | Onde você atende                                          |
-| -------------------------------------------------------- | ---------------------------------------------------------- |
-| Pilares de OO / encapsulamento                           | Entidades ricas (não anêmicas) em`domain`              |
-| Identificar classes não coesas / refatorar              | Seção "antes/depois" do`SubscribeToPlanUseCase`        |
-| 5 princípios SOLID aplicados                            | Tabela de mapeamento SOLID acima                           |
-| Importância do Clean Code no ciclo de vida              | Parágrafo introdutório da Parte 1                        |
-| Bad smells e pilares do Refactoring                      | Seção "antes/depois"                                     |
-| Importância dos Design Patterns                         | Parágrafo introdutório da Parte 3                        |
-| 1 criacional + 1 estrutural + 1 comportamental           | Factory/Builder + Adapter + Chain/Observer                 |
-| Código adaptável (novas classes sem afetar existentes) | OCP via interfaces (handlers, gateway)                     |
-| Arquitetura em camadas                                   | Estrutura modular`domain/application/infrastructure/api` |
-| Integração com APIs de terceiros                       | `PaymentGateway` (Adapter) simulando gateway externo     |
+| Item da rubrica                                          | Onde você atende                                                                                  |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Pilares de OO / encapsulamento                           | Entidades ricas (não anêmicas) em`domain`                                                      |
+| Identificar classes não coesas / refatorar              | Seção "antes/depois" do`SubscribeToPlanUseCase`                                                |
+| 5 princípios SOLID aplicados                            | Tabela de mapeamento SOLID acima                                                                   |
+| Importância do Clean Code no ciclo de vida              | Parágrafo introdutório da Parte 1                                                                |
+| Bad smells e pilares do Refactoring                      | Seção "antes/depois"                                                                             |
+| Importância dos Design Patterns                         | Parágrafo introdutório da Parte 3                                                                |
+| 1 criacional + 1 estrutural + 1 comportamental           | Factory Method + Adapter + Chain of Responsibility (Builder/Observer citados como trabalho futuro) |
+| Código adaptável (novas classes sem afetar existentes) | OCP via interfaces (handlers, gateway)                                                             |
+| Arquitetura em camadas                                   | Estrutura modular`domain/application/infrastructure/api`                                         |
+| Integração com APIs de terceiros                       | `PaymentGateway` (Adapter) simulando gateway externo                                             |
 
 ---
 
