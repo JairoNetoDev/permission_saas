@@ -53,38 +53,43 @@ src/main/java/com/saas/permissions/
 │   ├── domain/            (Entity base, DomainException, ValueObject)
 │   └── infrastructure/    (configs gerais)
 │
-└── modules/                        → todos os módulos de negócio agrupados aqui
-    ├── identity/                       → Cliente
-    │   ├── domain/      Client.java, ClientRepository.java (porta)
-    │   ├── application/ RegisterClientUseCase.java
-    │   ├── infrastructure/ JpaClientRepository.java
-    │   └── api/         ClientController.java
-    │
-    ├── billing/                        → Plano / Assinatura / API Key
-    │   ├── domain/      Plan.java, Subscription.java, ApiKey.java,
-    │   │                PaymentGateway.java (porta)
-    │   ├── application/ SubscribeToPlanUseCase.java
-    │   ├── infrastructure/ FakePaymentGatewayAdapter.java, ApiKeyFactory.java
-    │   └── api/         SubscriptionController.java
-    │
-    ├── project/                        → Projeto / Cargo / Rota
-    │   ├── domain/      Project.java, Role.java, Route.java,
-    │   │                ProjectBuilder.java, PlanLimitValidator.java
-    │   ├── application/ CreateProjectUseCase.java
-    │   └── api/         ProjectController.java
-    │
-    ├── permission/                     → 🔑 Middleware de validação (núcleo)
-    │   ├── domain/      PermissionValidationHandler.java (porta),
-    │   │                ApiKeyValidationHandler, TokenValidationHandler,
-    │   │                RoleRouteValidationHandler
-    │   ├── application/ ValidatePermissionUseCase.java
-    │   └── api/         PermissionController.java
-    │
-    └── audit/                          → Log de auditoria
-        ├── domain/      AuditLog.java, PermissionEventListener.java (porta)
-        ├── application/ AuditLogListener.java
-        └── infrastructure/ JpaAuditLogRepository.java
+├── identity/                       → Cliente
+│   ├── domain/      Client.java, ClientRepository.java (porta)
+│   ├── application/ RegisterClientUseCase.java
+│   ├── infrastructure/ JpaClientRepository.java
+│   └── api/         ClientController.java
+│
+├── billing/                        → Plano / Assinatura / API Key
+│   ├── domain/      Plan.java, Subscription.java, ApiKey.java,
+│   │                PaymentGateway.java (porta)
+│   ├── application/ SubscribeToPlanUseCase.java
+│   ├── infrastructure/ FakePaymentGatewayAdapter.java, ApiKeyFactory.java
+│   └── api/         SubscriptionController.java
+│
+├── project/                        → Projeto / Cargo / Rota
+│   ├── domain/      Project.java, Role.java, Route.java,
+│   │                ProjectBuilder.java, PlanLimitValidator.java
+│   ├── application/ CreateProjectUseCase.java
+│   └── api/         ProjectController.java
+│
+├── permission/                     → 🔑 Middleware de validação (núcleo)
+│   ├── domain/      PermissionValidationHandler.java (porta),
+│   │                ApiKeyValidationHandler, TokenValidationHandler,
+│   │                RoleRouteValidationHandler
+│   ├── application/ ValidatePermissionUseCase.java
+│   └── api/         PermissionController.java
+│
+└── audit/                          → Log de auditoria
+    ├── domain/      AuditLog.java, PermissionEventListener.java (porta)
+    ├── application/ AuditLogListener.java
+    └── infrastructure/ JpaAuditLogRepository.java
 ```
+
+Cada módulo de negócio (`identity`, `billing`, `project`, `permission`, `audit`) é um
+subpacote **direto** de `com.saas.permissions` — não fica agrupado sob uma pasta
+`modules/` intermediária. Isso é exigido pela detecção automática de Application
+Modules do Spring Modulith (cada subpacote direto do pacote da classe
+`@SpringBootApplication` vira um módulo verificável).
 
 Cada módulo segue o mesmo padrão: `domain` (entidades + interfaces/portas),
 `application` (casos de uso), `infrastructure` (implementações JPA/adapters),
