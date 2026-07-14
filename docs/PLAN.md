@@ -201,7 +201,7 @@ está coberto por `Factory Method`. Citar como trabalho futuro no relatório.
 - [X] Interface `PermissionValidationHandler` (Handler abstrato, `permission/domain/`)
 - [X] 3 handlers concretos encadeados: `ApiKeyValidationHandler` → `TokenValidationHandler` → `RoleRouteValidationHandler`
 - [X] Endpoint `POST /validate-permission`
-- [X] `ApiKeyValidationHandler` valida de verdade contra `billing` (novo `FindApiKeyByPlainKeyUseCase` + `ApiKeyRepository.findAllActive()`); testado ponta a ponta via curl com uma ApiKey real gerada por `POST /subscriptions`
+- [X] `ApiKeyValidationHandler` valida de verdade contra `billing` (novo `FindActiveApiKeyByPlainKeyUseCase` + `ApiKeyRepository.findAllActive()`); testado ponta a ponta via curl com uma ApiKey real gerada por `POST /subscriptions`
 - [X] **Este é o módulo mais importante para o professor testar isoladamente** — roda sozinho, sem precisar de `project`
 
 **⚠️ Decisão de escopo (dia da entrega, 05/07):** por falta de tempo, `TokenValidationHandler` e `RoleRouteValidationHandler` ficaram como handlers estruturalmente completos mas que sempre concedem (`PermissionCheckResult.allow()`), documentado em Javadoc e em `docs/PATTERNS.md`/`docs/DOMAIN.md`. Motivo: a regra real de Role/Rota depende do módulo `project` (Dia 4, não feito), e "Token" seria um 2º fator de auth fora do escopo do `CLAUDE.md`. Isso não compromete o requisito da rubrica (mínimo 1 padrão comportamental) — o Chain of Responsibility está implementado, testável e demonstra OCP de verdade (um handler novo se pluga sem tocar nos existentes).
