@@ -29,7 +29,7 @@ cp .env.example .env
 | Variável | Usada de fato? | Para quê |
 |---|---|---|
 | `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | ✅ | Conexão com o Postgres. Têm default em `application.yml` (`localhost:5432`, `saas`/`saas123`), então nem precisam estar no `.env` para rodar `./mvnw spring-boot:run` com `docker compose up -d postgres`. |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ❌ | `application.yml` referencia `${GOOGLE_CLIENT_ID}` para registrar o client OAuth2 do Google, mas `SecurityConfig` desabilita `oauth2Login` explicitamente (`.oauth2Login(oauth2 -> oauth2.disable())`) e libera todas as rotas (`anyRequest().permitAll()`). Login/JWT estão fora de escopo desta entrega (ver [`docs/PLAN.md`](docs/PLAN.md)). A variável só precisa existir com **qualquer valor não vazio** — sem isso o Spring falha ao resolver o placeholder e a aplicação nem sobe. Não há necessidade de criar credenciais reais no Google Cloud Console. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | ❌ | `application.yml` referencia `${GOOGLE_CLIENT_ID}` para registrar o client OAuth2 do Google, mas `SecurityConfig` desabilita `oauth2Login` explicitamente (`.oauth2Login(oauth2 -> oauth2.disable())`) e libera todas as rotas (`anyRequest().permitAll()`). Login/JWT estão fora de escopo desta entrega (ver [`docs/clean_code_e_padroes_de_projeto/PLAN.md`](docs/clean_code_e_padroes_de_projeto/PLAN.md)). A variável só precisa existir com **qualquer valor não vazio** — sem isso o Spring falha ao resolver o placeholder e a aplicação nem sobe. Não há necessidade de criar credenciais reais no Google Cloud Console. |
 | `JWT_SECRET` | ❌ | Mesmo motivo acima — referenciada em `application.yml` (`app.jwt.secret`), mas nenhum código gera ou valida JWT ainda. |
 
 `docker compose up` lê o `.env` automaticamente e já sobrescreve as credenciais do
@@ -140,7 +140,7 @@ Em `permission`, só o `ApiKeyValidationHandler` aplica uma regra real (valida a
 ApiKey contra `billing`). `TokenValidationHandler` e `RoleRouteValidationHandler`
 sempre concedem nesta entrega, porque dependem do módulo `project` (Role/Rota) e de
 um 2º fator de autenticação, nenhum dos dois implementado — decisão de escopo
-documentada em [`docs/PLAN.md`](docs/PLAN.md).
+documentada em [`docs/clean_code_e_padroes_de_projeto/PLAN.md`](docs/clean_code_e_padroes_de_projeto/PLAN.md).
 
 ---
 
@@ -153,11 +153,13 @@ estão desenhados mas não implementados — trabalho futuro.
 
 Onde cada padrão vive, por que foi escolhido e como estender:
 [`docs/PATTERNS.md`](docs/PATTERNS.md). Mapeamento dos 5 princípios SOLID:
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e [`docs/RELATORIO.md`](docs/RELATORIO.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
 ## Documentação
+
+A raiz de `docs/` guarda a documentação **do projeto como um todo**:
 
 | Arquivo | Conteúdo |
 |---|---|
@@ -165,9 +167,19 @@ Onde cada padrão vive, por que foi escolhido e como estender:
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Módulos, camadas, regras de comunicação, ADRs |
 | [`docs/DOMAIN.md`](docs/DOMAIN.md) | Glossário de entidades, value objects e invariantes de negócio |
 | [`docs/PATTERNS.md`](docs/PATTERNS.md) | Cada padrão GoF: onde vive, por quê, como estender |
-| [`docs/PLAN.md`](docs/PLAN.md) | Planejamento dia a dia, decisões de escopo, checklist da rubrica |
-| [`docs/RELATORIO.md`](docs/RELATORIO.md) | Relatório da disciplina (Clean Code, SOLID, GoF) |
 | [`docs/TEST-ARCHITECTURE.md`](docs/TEST-ARCHITECTURE.md) | Convenções de teste (unit/slice/integration), exemplos e pirâmide de testes adotada |
+| [`docs/DER.pdf`](docs/DER.pdf) | Diagrama entidade-relacionamento |
+
+Cada disciplina da Pós tem sua própria pasta, com o enunciado do professor e o plano
+daquela matéria:
+
+| Pasta | Conteúdo |
+|---|---|
+| [`docs/desenvolvimento_de_aplicacoes_java_com_spring_boot/`](docs/desenvolvimento_de_aplicacoes_java_com_spring_boot/) | **Em andamento.** Enunciado (`README.md`, `ETAPA1..4.md`) e [`PLAN.md`](docs/desenvolvimento_de_aplicacoes_java_com_spring_boot/PLAN.md) |
+| [`docs/clean_code_e_padroes_de_projeto/`](docs/clean_code_e_padroes_de_projeto/) | Entregue em 05/07/2026. [`PLAN.md`](docs/clean_code_e_padroes_de_projeto/PLAN.md) com o planejamento dia a dia e as decisões de escopo |
+
+O relatório escrito daquela disciplina foi entregue como PDF no Moodle e não está
+versionado aqui.
 
 ---
 
@@ -179,7 +191,7 @@ pagamento simulado e geração de ApiKey, middleware de validação de permissã
 **Fora de escopo (trabalho futuro):** criação de Projeto/Cargo/Rota respeitando
 limite do plano, log de auditoria, gateway de pagamento real, autenticação/JWT
 completos, exportação CSV/JSON, front-end. Detalhes e justificativa em
-[`docs/PLAN.md`](docs/PLAN.md).
+[`docs/clean_code_e_padroes_de_projeto/PLAN.md`](docs/clean_code_e_padroes_de_projeto/PLAN.md).
 
 ---
 
