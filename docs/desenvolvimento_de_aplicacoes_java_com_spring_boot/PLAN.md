@@ -145,9 +145,9 @@ caminho natural para a "mensageria e processamento assíncrono" citada pelo prof
 
 | Dia | Data | Entrega |
 |---|---|---|
-| 1 | Seg 11/08 | `Project`, `Role`, `Route` no `domain` — atributos, comportamentos, `toString()` |
-| 2 | Ter 12/08 | `AuditEvent` abstrato + 2 subclasses; arquivos `.txt` de seed; `ProjectFileLoader` |
-| 3 | Qua 13/08 | `CommandLineRunner` de demo (profile `demo`) montando o grafo e imprimindo → **tag `etapa-1`** |
+| 1 | Seg 11/08 | ✅ `Project`, `Role`, `Route` no `domain` — atributos, comportamentos, `toString()` *(feito em 12/08)* |
+| 2 | Ter 12/08 | ⚠️ `AuditEvent` abstrato + 2 subclasses ✅; arquivos `.txt` de seed ✅; `ProjectFileLoader` ⛔ **pendente** |
+| 3 | Qua 13/08 | `ProjectFileLoader` + `CommandLineRunner` de demo (profile `demo`) montando o grafo e imprimindo → **tag `etapa-1`** |
 | 4 | Qui 14/08 | Portas `ProjectRepository`/`AuditEventRepository` + adapters `InMemory*` com `Map`; use cases CRUD |
 | 5 | Sex 15/08 | Streams e lambdas: filtrar rotas por método, ordenar eventos por data, buscar por path, transformar em DTO; exceções de domínio → **tag `etapa-2`** |
 | 6 | Sáb 16/08 | `ProjectController` CRUD completo (GET/POST/PUT/DELETE, 200/201/204/400/404) + DTOs + mappers |
@@ -161,6 +161,29 @@ caminho natural para a "mensageria e processamento assíncrono" citada pelo prof
 | 14 | Dom 24/08 | Buffer, PDF e postagem no Moodle |
 
 Os dias 1 a 7 são o caminho crítico. Em caso de atraso, cortar o OpenFeign (dia 12) — nunca as tags.
+
+### Situação em 12/08/2026
+
+O dia 11/08 não foi trabalhado; os dias 1 e 2 foram feitos juntos em 12/08. O cronograma **não
+está atrasado** — o único item que escorregou para o dia 3 é o `ProjectFileLoader`.
+
+**Concluído:**
+- `project/domain/` — `Project`, `Role`, `Route`, com invariantes (`maxRoles`, duplicidade
+  case-insensitive de cargo e de `httpMethod`+`path`, soft delete via `deletedAt`) e seis
+  exceções de domínio herdando `BusinessRuleException`.
+- `audit/domain/` — `AuditEvent` abstrata + `PermissionCheckEvent` + `ProjectLifecycleEvent` +
+  enum `LifecycleAction`. Herança via `@SuperBuilder`.
+- Seed em `src/main/resources/data/` — `projects.txt` (3), `roles.txt` (8), `routes.txt` (11),
+  separador `;`, filhos referenciando o pai por UUID.
+- Documentação: `DOMAIN.md` (entidades + invariantes), `ARCHITECTURE.md` (ADR-002, ADR-003,
+  tabela de exceções).
+
+**Pendente para o dia 3 (13/08), antes da tag `etapa-1`:**
+1. `ProjectFileLoader` lendo os três `.txt` — carregar `projects.txt` num `Map<UUID, Project>`,
+   depois `roles.txt`/`routes.txt` chamando `addRole`/`addRoute` para passar pelas validações.
+   Atenção: o loader **tem** que passar `.id(...)` explicitamente no builder (ver ADR-003).
+2. `CommandLineRunner` de demo no profile `demo`, imprimindo o grafo montado.
+3. `git tag etapa-1`.
 
 ---
 
@@ -185,6 +208,12 @@ aos dois itens em cerca de 2h, sem exigir build separado.
 
 **Spring Security / autenticação real.** Sugerida pelo professor, mas sem item de rubrica
 correspondente; consumiria os 14 dias disponíveis.
+
+**Encapsulamento real das entidades de domínio (trocar `@Data` por `@Getter` + coleções
+imutáveis).** Identificado durante o Dia 1 desta disciplina: o `@Data` gera setters públicos
+que permitem furar os invariantes do domínio (ex.: `project.getRoles().add(role)` ignora a
+validação de `maxRoles`). É um refactor transversal aos cinco módulos, sem item de rubrica
+correspondente. Decisão e plano de execução registrados em `docs/ARCHITECTURE.md`, ADR-002.
 
 ---
 
