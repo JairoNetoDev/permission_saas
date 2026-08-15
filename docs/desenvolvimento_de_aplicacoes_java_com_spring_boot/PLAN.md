@@ -146,9 +146,9 @@ caminho natural para a "mensageria e processamento assíncrono" citada pelo prof
 | Dia | Data | Entrega |
 |---|---|---|
 | 1 | Seg 11/08 | ✅ `Project`, `Role`, `Route` no `domain` — atributos, comportamentos, `toString()` *(feito em 12/08)* |
-| 2 | Ter 12/08 | ⚠️ `AuditEvent` abstrato + 2 subclasses ✅; arquivos `.txt` de seed ✅; `ProjectFileLoader` ⛔ **pendente** |
-| 3 | Qua 13/08 | `ProjectFileLoader` + `CommandLineRunner` de demo (profile `demo`) montando o grafo e imprimindo → **tag `etapa-1`** |
-| 4 | Qui 14/08 | Portas `ProjectRepository`/`AuditEventRepository` + adapters `InMemory*` com `Map`; use cases CRUD |
+| 2 | Ter 12/08 | ✅ `AuditEvent` abstrato + 2 subclasses; arquivos `.txt` de seed *(o `ProjectFileLoader` escorregou para o dia 3)* |
+| 3 | Qua 13/08 | ⚠️ `ProjectFileLoader` ✅ *(feito em 14/08)*; `CommandLineRunner` de demo ⛔ **pendente** → tag `etapa-1` ainda não criada |
+| 4 | Qui 14/08 | ⛔ não iniciado — o dia foi consumido pelo dia 3. Portas `ProjectRepository`/`AuditEventRepository` + adapters `InMemory*` com `Map`; use cases CRUD |
 | 5 | Sex 15/08 | Streams e lambdas: filtrar rotas por método, ordenar eventos por data, buscar por path, transformar em DTO; exceções de domínio → **tag `etapa-2`** |
 | 6 | Sáb 16/08 | `ProjectController` CRUD completo (GET/POST/PUT/DELETE, 200/201/204/400/404) + DTOs + mappers |
 | 7 | Dom 17/08 | `AuditEventController` com filtros + anotações Swagger + coleção Postman versionada → **tag `etapa-3`** |
@@ -162,10 +162,14 @@ caminho natural para a "mensageria e processamento assíncrono" citada pelo prof
 
 Os dias 1 a 7 são o caminho crítico. Em caso de atraso, cortar o OpenFeign (dia 12) — nunca as tags.
 
-### Situação em 12/08/2026
+### Situação em 15/08/2026
 
-O dia 11/08 não foi trabalhado; os dias 1 e 2 foram feitos juntos em 12/08. O cronograma **não
-está atrasado** — o único item que escorregou para o dia 3 é o `ProjectFileLoader`.
+O dia 11/08 não foi trabalhado; os dias 1 e 2 foram feitos juntos em 12/08. O dia 13/08 também
+não foi trabalhado, e o dia 14/08 foi usado para concluir o dia 3.
+
+**O cronograma está com cerca de dois dias de atraso:** o dia 3 ainda não fechou (falta o runner
+de demo e a tag), e os dias 4 e 5 não começaram. O buffer do dia 14 (24/08) absorve isso, mas os
+dias 1 a 7 são o caminho crítico — não há folga a gastar antes da `etapa-3`.
 
 **Concluído:**
 - `project/domain/` — `Project`, `Role`, `Route`, com invariantes (`maxRoles`, duplicidade
@@ -173,17 +177,20 @@ está atrasado** — o único item que escorregou para o dia 3 é o `ProjectFile
   exceções de domínio herdando `BusinessRuleException`.
 - `audit/domain/` — `AuditEvent` abstrata + `PermissionCheckEvent` + `ProjectLifecycleEvent` +
   enum `LifecycleAction`. Herança via `@SuperBuilder`.
-- Seed em `src/main/resources/data/` — `projects.txt` (3), `roles.txt` (8), `routes.txt` (11),
+- Seed em `src/main/resources/data/` — `projects.txt` (3), `roles.txt` (8), `routes.txt` (10),
   separador `;`, filhos referenciando o pai por UUID.
-- Documentação: `DOMAIN.md` (entidades + invariantes), `ARCHITECTURE.md` (ADR-002, ADR-003,
-  tabela de exceções).
+- `project/infrastructure/ProjectFileLoader` — lê os três `.txt` do classpath e monta o grafo
+  1-N chamando `addRole`/`addRoute`, de modo que o seed passa pelos invariantes do domínio.
+  Campos obrigatórios validados antes do parse; `SeedFileException` reporta arquivo, linha e
+  contagem de campos. Verificado: carrega 3 projetos, 8 cargos e 10 rotas.
+- `ProjectNotFoundException` em `project/domain/project/exception/`, estendendo
+  `ResourceNotFoundException`.
+- Documentação: `DOMAIN.md` (entidades + invariantes), `ARCHITECTURE.md` (ADR-002, ADR-003 e a
+  subseção sobre o risco de `equals`/`hashCode` ao reverter o ADR-003 na etapa 4).
 
-**Pendente para o dia 3 (13/08), antes da tag `etapa-1`:**
-1. `ProjectFileLoader` lendo os três `.txt` — carregar `projects.txt` num `Map<UUID, Project>`,
-   depois `roles.txt`/`routes.txt` chamando `addRole`/`addRoute` para passar pelas validações.
-   Atenção: o loader **tem** que passar `.id(...)` explicitamente no builder (ver ADR-003).
-2. `CommandLineRunner` de demo no profile `demo`, imprimindo o grafo montado.
-3. `git tag etapa-1`.
+**Pendente para fechar a `etapa-1`:**
+1. `CommandLineRunner` de demo no profile `demo`, imprimindo o grafo montado.
+2. `git tag etapa-1`.
 
 ---
 
