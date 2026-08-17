@@ -148,7 +148,7 @@ caminho natural para a "mensageria e processamento assíncrono" citada pelo prof
 | 1 | Seg 11/08 | ✅ `Project`, `Role`, `Route` no `domain` — atributos, comportamentos, `toString()` *(feito em 12/08)* |
 | 2 | Ter 12/08 | ✅ `AuditEvent` abstrato + 2 subclasses; arquivos `.txt` de seed *(o `ProjectFileLoader` escorregou para o dia 3)* |
 | 3 | Qua 13/08 | ✅ `ProjectFileLoader` *(feito em 14/08)*; runners de demo *(feitos em 17/08)* → falta só criar a tag `etapa-1` |
-| 4 | Qui 14/08 | ⛔ não iniciado — o dia foi consumido pelo dia 3. Portas `ProjectRepository`/`AuditEventRepository` + adapters `InMemory*` com `Map`; use cases CRUD |
+| 4 | Qui 14/08 | ⚠️ `ProjectRepository` + `InMemoryProjectRepository` + use cases de leitura/criação ✅ *(feito em 17/08)*; falta a porta `AuditEventRepository` e os use cases de update/delete |
 | 5 | Sex 15/08 | Streams e lambdas: filtrar rotas por método, ordenar eventos por data, buscar por path, transformar em DTO; exceções de domínio → **tag `etapa-2`** |
 | 6 | Sáb 16/08 | `ProjectController` CRUD completo (GET/POST/PUT/DELETE, 200/201/204/400/404) + DTOs + mappers |
 | 7 | Dom 17/08 | `AuditEventController` com filtros + anotações Swagger + coleção Postman versionada → **tag `etapa-3`** |
@@ -207,6 +207,21 @@ para cerca de quatro dias e as etapas 2, 3 e 4 seguem abertas.
   de `project` sozinho não cobria. Fica no módulo `audit` porque `audit.domain` não é
   `@NamedInterface`: importá-lo de `project` quebraria o `verifiesModularStructure()`. Os eventos
   referenciam o projeto do seed por `UUID`, sem acoplamento de código entre os módulos.
+- `project/domain/project/ProjectRepository` — porta com `save`, `findById`, `findAll` e
+  `existsById`. Sem `deleteById`: o soft delete é comportamento do agregado (`Project.delete()`),
+  e expor remoção física na porta permitiria contorná-lo por fora do domínio.
+- `project/infrastructure/InMemoryProjectRepository` — `ConcurrentHashMap<UUID, Project>`
+  populado num `@PostConstruct` pelo `ProjectFileLoader`, ligando os itens 5 e 7 da rubrica
+  (os arquivos texto alimentam o banco simulado). Guardas `ensureProject`/`ensureId` porque
+  `ConcurrentHashMap` rejeita chave nula e o NPE cru não indicaria a origem.
+- `project/application/` — `CreateProjectUseCase` (com `CreateProjectCommand`),
+  `FindProjectByIdUseCase` e `FindAllProjectsUseCase`. O filtro de `deletedAt` e a ordenação
+  por `createdAt` ficam no use case, não na porta: mantém o adapter burro e antecipa o
+  requisito de streams do Dia 5. Projeto com soft delete responde como inexistente também no
+  `findById`, para não divergir do `findAll`.
+- `ProjectDemoRunner` passou a injetar `FindAllProjectsUseCase` em vez de chamar o loader
+  direto — a demo agora percorre `Runner → UseCase → Map`, a forma prevista para a etapa-2.
+  Verificado: 3 projetos, 8 cargos, 10 rotas.
 - Correção: `PermissionCheckEvent` e `ProjectLifecycleEvent` estavam com `@Data`, cujo
   `toString()` gerado sobrescrevia o de `AuditEvent` e omitia `id`, `projectId` e `occurredAt` —
   o `describe()` nunca era chamado. Trocado por `@Getter`/`@Setter`; confirmado no bytecode que a
