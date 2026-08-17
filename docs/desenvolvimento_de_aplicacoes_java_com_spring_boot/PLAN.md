@@ -147,7 +147,7 @@ caminho natural para a "mensageria e processamento assíncrono" citada pelo prof
 |---|---|---|
 | 1 | Seg 11/08 | ✅ `Project`, `Role`, `Route` no `domain` — atributos, comportamentos, `toString()` *(feito em 12/08)* |
 | 2 | Ter 12/08 | ✅ `AuditEvent` abstrato + 2 subclasses; arquivos `.txt` de seed *(o `ProjectFileLoader` escorregou para o dia 3)* |
-| 3 | Qua 13/08 | ⚠️ `ProjectFileLoader` ✅ *(feito em 14/08)*; `CommandLineRunner` de demo ⛔ **pendente** → tag `etapa-1` ainda não criada |
+| 3 | Qua 13/08 | ✅ `ProjectFileLoader` *(feito em 14/08)*; runners de demo *(feitos em 17/08)* → falta só criar a tag `etapa-1` |
 | 4 | Qui 14/08 | ⛔ não iniciado — o dia foi consumido pelo dia 3. Portas `ProjectRepository`/`AuditEventRepository` + adapters `InMemory*` com `Map`; use cases CRUD |
 | 5 | Sex 15/08 | Streams e lambdas: filtrar rotas por método, ordenar eventos por data, buscar por path, transformar em DTO; exceções de domínio → **tag `etapa-2`** |
 | 6 | Sáb 16/08 | `ProjectController` CRUD completo (GET/POST/PUT/DELETE, 200/201/204/400/404) + DTOs + mappers |
@@ -189,8 +189,29 @@ dias 1 a 7 são o caminho crítico — não há folga a gastar antes da `etapa-3
   subseção sobre o risco de `equals`/`hashCode` ao reverter o ADR-003 na etapa 4).
 
 **Pendente para fechar a `etapa-1`:**
-1. `CommandLineRunner` de demo no profile `demo`, imprimindo o grafo montado.
-2. `git tag etapa-1`.
+1. `git tag etapa-1`.
+
+### Situação em 17/08/2026
+
+O dia 16/08 não foi trabalhado. O dia 3 foi fechado em 17/08 com os runners de demo; restam
+os dias 4 a 7 (portas, `Map`, use cases, controllers) e **7 dias até o prazo** — o atraso subiu
+para cerca de quatro dias e as etapas 2, 3 e 4 seguem abertas.
+
+**Concluído em 17/08:**
+- `project/infrastructure/ProjectDemoRunner` (`@Profile("demo")`, `@Order(1)`) — carrega o seed
+  pelo `ProjectFileLoader` e imprime o grafo 1-N no console. Verificado: 3 projetos, 8 cargos,
+  10 rotas.
+- `audit/infrastructure/AuditDemoRunner` (`@Profile("demo")`, `@Order(2)`) — monta um
+  `List<AuditEvent>` com um `ProjectLifecycleEvent` e dois `PermissionCheckEvent` e imprime
+  polimorficamente, expondo a herança e o atributo real (`durationMs`) no console, que o runner
+  de `project` sozinho não cobria. Fica no módulo `audit` porque `audit.domain` não é
+  `@NamedInterface`: importá-lo de `project` quebraria o `verifiesModularStructure()`. Os eventos
+  referenciam o projeto do seed por `UUID`, sem acoplamento de código entre os módulos.
+- Correção: `PermissionCheckEvent` e `ProjectLifecycleEvent` estavam com `@Data`, cujo
+  `toString()` gerado sobrescrevia o de `AuditEvent` e omitia `id`, `projectId` e `occurredAt` —
+  o `describe()` nunca era chamado. Trocado por `@Getter`/`@Setter`; confirmado no bytecode que a
+  subclasse não gera mais `toString()`. `describe()` de `PermissionCheckEvent` passou a incluir
+  a duração, para o número real aparecer na saída do console.
 
 ---
 
