@@ -391,3 +391,38 @@ Registrado aqui para constar na citação de fontes exigida pelo enunciado.
 **Pendente:** dias 8, 9 e 10 — persistência JPA (itens 2, 13, 14 e 15 da rubrica), regra real do
 `RoleRouteValidationHandler`, OpenFeign (item 16, primeiro cortável) e o front-end estático
 (itens 11 e 12), se sobrar tempo no dia 31.
+
+### Situação em 30/08/2026
+
+O dia 8 (persistência) não tinha sido executado em 29/08 — o repositório fechou o dia 29 com as
+etapas 2 e 3 prontas, mas sem nenhuma `@Entity` nos módulos novos e com as migrations paradas na
+`V4`. O dia 8 passou para 30/08, e o dia 9 (Observer restante, `RoleRouteValidationHandler`,
+OpenFeign, documentação) mais o dia 10 de fechamento ficam para 31/08, o próprio dia do prazo.
+
+**Concluído — schema (primeiro item do dia 8):**
+- Migrations `V5`–`V8`: `projects`, `roles`, `routes` e `audit_events`. O plano previa `V5`–`V7`,
+  mas são quatro tabelas — `audit_events` ganhou arquivo próprio, seguindo a convenção de uma
+  tabela por migration já usada em `V1`–`V4`.
+- `roles` e `routes` com FK para `projects` e `ON DELETE CASCADE`, acompanhando o
+  `cascade = ALL` / `orphanRemoval = true` previsto para o `@OneToMany` (item 3 do checklist do
+  ADR-003). `projects.client_id` e `audit_events.project_id` ficaram **sem** FK — decisão e
+  motivos em `docs/ARCHITECTURE.md`, ADR-004.
+- `audit_events` em `SINGLE_TABLE`, discriminada por `event_type`, com os valores iguais aos de
+  `AuditEvent.type()`. As colunas de subclasse são nullable (limitação do SINGLE_TABLE) e a
+  obrigatoriedade volta como `CHECK` condicionado ao discriminador.
+- Índices únicos case-insensitive espelhando os invariantes de `addRole`/`addRoute`, e `CHECK`
+  espelhando as Bean Validations de `AddRouteRequest` e `CreateProjectRequest`.
+- Verificado num Postgres 16 limpo: as oito migrations aplicam em sequência, o seed dos três
+  `.txt` entra íntegro (3 projetos, 8 cargos, 10 rotas) e 16 casos de constraint se comportam
+  como o domínio (duplicidade de cargo/rota, método HTTP inválido, `max_roles` zero, evento de
+  auditoria sem `granted`, discriminador desconhecido, cargo órfão).
+
+**Decisão pendente antes de escrever a `ProjectJpaEntity`:** qual das três opções do ADR-003
+(`Persistable`, chave natural ou `equals` null-safe) resolve o conflito `@Builder.Default` do
+`id` × `SimpleJpaRepository.save()`. O schema não força nenhuma das três — as PKs têm
+`DEFAULT gen_random_uuid()`, que funciona tanto com `id` vindo do domínio quanto gerado pelo
+banco.
+
+**Próximo no dia 8:** entidades JPA (`ProjectJpaEntity` com `@OneToMany`, `Role`/`Route` com
+`@ManyToOne`, `AuditEventJpaEntity` + subclasses), `JpaRepository` com pelo menos uma consulta
+derivada (item 4 da Etapa 4), adapters implementando as portas e remoção dos `InMemory*`.
