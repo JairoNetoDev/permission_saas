@@ -2,8 +2,8 @@
 
 **Aluno:** Jairo Williams Guedes Lopes Neto
 **Disciplina:** Desenvolvimento de aplicações Java com Spring Boot
-**Prazo:** 24/08/2026 23:59 (entrega única no Moodle)
-**Disponibilidade:** ~1h/dia
+**Prazo:** 31/08/2026 23:59 (entrega única no Moodle — prazo confirmado com o professor em 26/08)
+**Disponibilidade:** mínimo 2h/dia; 4h nos dias 29 e 30/08 (fim de semana)
 **Base:** projeto Permission SaaS, aprovado pelo professor para continuidade
 
 > ⚠️ Este arquivo é o plano **desta** disciplina. Cada matéria tem sua própria pasta em
@@ -143,24 +143,42 @@ caminho natural para a "mensageria e processamento assíncrono" citada pelo prof
 
 ## Cronograma
 
+### Executado (11/08 – 17/08, ~1h/dia)
+
 | Dia | Data | Entrega |
 |---|---|---|
 | 1 | Seg 11/08 | ✅ `Project`, `Role`, `Route` no `domain` — atributos, comportamentos, `toString()` *(feito em 12/08)* |
 | 2 | Ter 12/08 | ✅ `AuditEvent` abstrato + 2 subclasses; arquivos `.txt` de seed *(o `ProjectFileLoader` escorregou para o dia 3)* |
-| 3 | Qua 13/08 | ✅ `ProjectFileLoader` *(feito em 14/08)*; runners de demo *(feitos em 17/08)* → falta só criar a tag `etapa-1` |
+| 3 | Qua 13/08 | ✅ `ProjectFileLoader` *(feito em 14/08)*; runners de demo *(feitos em 17/08)*; **tag `etapa-1` criada em 17/08** |
 | 4 | Qui 14/08 | ⚠️ `ProjectRepository` + `InMemoryProjectRepository` + use cases de leitura/criação ✅ *(feito em 17/08)*; falta a porta `AuditEventRepository` e os use cases de update/delete |
-| 5 | Sex 15/08 | Streams e lambdas: filtrar rotas por método, ordenar eventos por data, buscar por path, transformar em DTO; exceções de domínio → **tag `etapa-2`** |
-| 6 | Sáb 16/08 | `ProjectController` CRUD completo (GET/POST/PUT/DELETE, 200/201/204/400/404) + DTOs + mappers |
-| 7 | Dom 17/08 | `AuditEventController` com filtros + anotações Swagger + coleção Postman versionada → **tag `etapa-3`** |
-| 8 | Seg 18/08 | `ProjectJpaEntity` com `@OneToMany`/`@ManyToOne`, herança `SINGLE_TABLE` no audit, migrations Flyway `V5`–`V7` |
-| 9 | Ter 19/08 | `JpaRepository` + adapters; remover os `InMemory*`; consultas `findBy…` + operação de filtro/ordenação |
-| 10 | Qua 20/08 | Bean Validation nos DTOs novos + serialização sem referência circular |
-| 11 | Qui 21/08 | Observer: evento publicado no `permission`, `AuditLogListener` grava no banco e no `.txt`; **completar o `RoleRouteValidationHandler`** com a regra real |
-| 12 | Sex 22/08 | OpenFeign: enriquecer `PermissionCheckEvent` com país/cidade do IP |
-| 13 | Sáb 23/08 | Documentação (`DOMAIN`, `API`, `ARCHITECTURE`, `PATTERNS`, este arquivo), README de execução, revisão → **tag `etapa-4`** |
-| 14 | Dom 24/08 | Buffer, PDF e postagem no Moodle |
 
-Os dias 1 a 7 são o caminho crítico. Em caso de atraso, cortar o OpenFeign (dia 12) — nunca as tags.
+Entre 18/08 e 25/08 não houve trabalho no projeto (ver "Situação em 26/08/2026").
+
+### Replanejado (26/08 – 31/08, mínimo 2h/dia)
+
+| Dia | Data | Horas | Entrega |
+|---|---|---|---|
+| 5 | Qua 26/08 | 2h | ✅ *(feito em 29/08)* Fechar o dia 4 e a etapa 2: `UpdateProjectUseCase`, `DeleteProjectUseCase`, `AddRoleToProjectUseCase`, `AddRouteToProjectUseCase`; streams/lambdas (filtrar rotas por método, buscar por `path`, ordenar por data); porta `AuditEventRepository` + `InMemoryAuditEventRepository` → **tag `etapa-2`** |
+| 6 | Qui 27/08 | 2h | ✅ *(feito em 29/08)* `ProjectController` CRUD completo (GET/POST/PUT/DELETE, 200/201/204/400/404) + DTOs + mappers + Bean Validation nos DTOs *(o antigo dia 10 foi fundido aqui: mexe nos mesmos arquivos)* |
+| 7 | Sex 28/08 | 2h | ✅ *(feito em 29/08)* `AuditEventController` com filtros + anotações Swagger nos dois controllers + coleção Postman versionada → **tag `etapa-3`** |
+| 8 | Sáb 29/08 | 4h | Persistência: `ProjectJpaEntity`/`RoleJpaEntity`/`RouteJpaEntity` com `@OneToMany`/`@ManyToOne`, herança `SINGLE_TABLE` no `audit`, migrations Flyway `V5`–`V7`, `JpaRepository` + adapters, remoção dos `InMemory*`, serialização sem referência circular |
+| 9 | Dom 30/08 | 4h | Observer (`PermissionValidatedEvent` + `AuditLogListener` gravando banco e `.txt`), **`RoleRouteValidationHandler` com a regra real**, OpenFeign (`GeoLocationClient`), documentação (`DOMAIN`, `API`, `ARCHITECTURE`, `PATTERNS`, este arquivo) → **tag `etapa-4`** |
+| 10 | Seg 31/08 | 2h | Buffer: rodar a coleção Postman inteira, `./mvnw test`, `docker compose up --build`, README de execução, PDF e postagem no Moodle |
+
+Total planejado: **16h em 6 dias**. O caminho crítico agora é o dia 8 (persistência): sem ele
+caem os itens 2, 13, 14 e 15 da rubrica de uma vez.
+
+### Ordem de corte, se atrasar
+
+Cortar de baixo para cima, nunca as tags:
+
+1. **OpenFeign** (dia 9) — 1 item de rubrica (16), o mais isolado do resto.
+2. **`AuditEventFileWriter`/`AuditEventFileLoader`** — os itens 4 e 5 já estão cobertos pelo
+   `ProjectFileLoader`; a escrita em `.txt` é reforço, não requisito.
+3. **Filtros do `AuditEventController`** — entregar só o `GET` sem query params.
+
+Se em algum dia a etapa do dia não fechar, o dia 31/08 deixa de ser buffer e vira dia de
+execução — a postagem no Moodle passa a ser a última hora do dia 31.
 
 ### Situação em 15/08/2026
 
@@ -228,6 +246,29 @@ para cerca de quatro dias e as etapas 2, 3 e 4 seguem abertas.
   subclasse não gera mais `toString()`. `describe()` de `PermissionCheckEvent` passou a incluir
   a duração, para o número real aparecer na saída do console.
 
+### Situação em 26/08/2026
+
+O professor estendeu o prazo para **31/08/2026**. Entre 18/08 e 25/08 não houve trabalho no
+projeto — o último commit é de 17/08 (`985ff94`). Restam **6 dias**, e a disponibilidade subiu
+de ~1h para no mínimo 2h/dia.
+
+**Estado verificado no repositório:**
+- `etapa-1` ✅ tagueada em 17/08, apontando para `fbb99f3`.
+- `project/domain/` e `audit/domain/` completos; `ProjectFileLoader`, `InMemoryProjectRepository`,
+  os dois demo runners e três use cases (`CreateProject`, `FindProjectById`, `FindAllProjects`).
+- `project/api/` e `audit/api/`, `audit/application/` e `audit/infrastructure` (fora do runner)
+  ainda vazios — nenhum endpoint REST do escopo novo existe.
+- Nenhuma entidade JPA, migration ou adapter dos módulos novos.
+- `etapa-2`, `etapa-3` e `etapa-4` ❌ abertas.
+
+**O que mudou no plano:** o cronograma de 14 dias × 1h foi comprimido para 6 dias × 2–4h. As
+fusões feitas para caber:
+- Bean Validation (antigo dia 10) foi para o dia do `ProjectController` — mesmos arquivos.
+- Entidades JPA, adapters e serialização (antigos dias 8, 9 e parte do 10) viraram um único
+  bloco de 4h no sábado.
+- Observer, `RoleRouteValidationHandler`, OpenFeign e documentação (antigos dias 11, 12 e 13)
+  viraram um único bloco de 4h no domingo, com o OpenFeign como primeiro item cortável.
+
 ---
 
 ## Reaproveitamento (não reinventar)
@@ -245,12 +286,12 @@ para cerca de quatro dias e as etapas 2, 3 e 4 seguem abertas.
 
 **Front-end (itens 11 e 12 da rubrica).** São 2 dos 16 itens (~12,5%). O Swagger UI não
 substitui: a rubrica pede um projeto front-end que consome os endpoints e apresenta os dados.
-Se sobrar tempo no dia 14, uma página estática única
+Se sobrar tempo no dia 31/08, uma página estática única
 (`src/main/resources/static/index.html` com `fetch` para `/projects` e `/audit-events`) atende
 aos dois itens em cerca de 2h, sem exigir build separado.
 
 **Spring Security / autenticação real.** Sugerida pelo professor, mas sem item de rubrica
-correspondente; consumiria os 14 dias disponíveis.
+correspondente; consumiria sozinha todo o tempo restante.
 
 **Encapsulamento real das entidades de domínio (trocar `@Data` por `@Getter` + coleções
 imutáveis).** Identificado durante o Dia 1 desta disciplina: o `@Data` gera setters públicos
@@ -291,3 +332,62 @@ estoura referência circular e que `logs/audit-events.txt` foi escrito.
 ```bash
 git tag -l    # deve listar etapa-1 etapa-2 etapa-3 etapa-4
 ```
+
+### Situação em 29/08/2026
+
+Os dias 26, 27 e 28/08 não foram trabalhados. Em 29/08 os dias 5, 6 e 7 foram executados juntos:
+as **etapas 2 e 3 fecharam no mesmo dia**, e restam os dias 8 (persistência JPA) e 9 (Observer,
+`RoleRouteValidationHandler`, OpenFeign) mais o dia 10 de fechamento — com **2 dias até o prazo**.
+
+O trabalho deste dia foi feito com apoio de IA (Claude) na escrita do código das camadas, o que
+extrapola o modo de trabalho combinado no início da disciplina ("Claude guia, Jairo codifica").
+Registrado aqui para constar na citação de fontes exigida pelo enunciado.
+
+**Concluído — etapa 2 (tag `etapa-2` em `e9da117`):**
+- `Project.update()` com validação de campo em branco e de `maxRoles` menor que os cargos já
+  cadastrados; `InvalidProjectDataException`.
+- `UpdateProjectUseCase`, `DeleteProjectUseCase` (soft delete pelo agregado, sem remoção na porta),
+  `AddRoleToProjectUseCase`, `AddRouteToProjectUseCase`.
+- `SearchProjectsUseCase` (filtro por trecho de nome + situação, ordenação alfabética) e
+  `FindProjectRoutesUseCase` (filtro por método HTTP, ordenação por `path`) — os exemplos de
+  Collections/lambdas/Streams exigidos pela Etapa 2.
+- `ProjectDemoRunner` passou a imprimir resumo (`map`/`reduce`), busca e filtro de rotas.
+- Decisão: a porta `AuditEventRepository` **não** entrou na etapa 2 como estava previsto — os itens
+  7 e 8 da rubrica já estão cobertos pelo `Map` de `InMemoryProjectRepository` e pelos use cases.
+  Ela acabou entrando junto com o `audit` na etapa 3, que é onde passou a ter uso real.
+
+**Concluído — etapa 3:**
+- `ProjectController`: 8 endpoints (CRUD de projeto + sub-recursos `roles` e `routes`), com
+  201 + `Location`, 204, 400, 404 e 409, Bean Validation nos DTOs e anotações OpenAPI.
+- Mappers de API: a montagem dos commands saiu do controller. `CreateProjectMapper`,
+  `SearchProjectsMapper` e os mappers de resposta implementam `Mapper<I,O>`; `UpdateProjectMapper`,
+  `AddRoleToProjectMapper` e `AddRouteToProjectMapper` ficam fora da interface porque o command
+  junta o `projectId` do caminho com o corpo da requisição — decisão documentada no javadoc.
+- Serialização do 1-N: o pai embute os filhos e cada filho referencia o pai por `projectId`,
+  eliminando a referência circular sem `@JsonIgnore` (antecipa o requisito 6 da Etapa 4).
+- `audit` completo para leitura: porta `AuditEventRepository`, `InMemoryAuditEventRepository`
+  (que atribui o `id` no `save`, respeitando o ADR-001), `FindAuditEventsUseCase` com filtros
+  `type`/`projectId`/`onlyDenied`, `AuditEventController` (`GET /audit-events`) e um único
+  `AuditEventResponse` para toda a hierarquia, via `type()` e `describe()`.
+- **Observer antecipado do dia 9:** `PermissionValidatedEvent` (pacote `permission/domain/event`
+  com `@NamedInterface("events")`), publicado por `ValidatePermissionUseCase` e consumido por
+  `AuditLogListener`. Usa `@EventListener` e não `@ApplicationModuleListener` porque este último
+  implica `AFTER_COMMIT` e o fluxo ainda não é transacional — trocar na etapa 4.
+- Coleção Postman versionada em `docs/postman/permission-saas.postman_collection.json`:
+  26 requisições em 4 pastas, encadeadas por variáveis, verificadas com `newman` (30 asserções,
+  0 falhas, re-executável).
+- Documentação atualizada: `API.md` (todos os endpoints novos + coleção), `PATTERNS.md` (Observer
+  movido para "implementados"), `ARCHITECTURE.md` (mapa de módulos, fluxo de negócio, estrutura de
+  pacotes).
+
+**Achados registrados durante os testes da API:**
+1. `POST /plans` devolve **200** em vez de 201, divergindo dos demais endpoints de criação.
+2. `POST /plans` com nome repetido devolve **500**: a constraint `uq_plans_name` estoura sem
+   exceção de domínio correspondente. O correto seria 409 via `PlanNameAlreadyInUseException`.
+3. A descrição do evento de auditoria mostra `httpMethod = null`, porque
+   `ValidatePermissionRequest` só carrega `route`. Fecha na etapa 4 junto com a regra real do
+   `RoleRouteValidationHandler`.
+
+**Pendente:** dias 8, 9 e 10 — persistência JPA (itens 2, 13, 14 e 15 da rubrica), regra real do
+`RoleRouteValidationHandler`, OpenFeign (item 16, primeiro cortável) e o front-end estático
+(itens 11 e 12), se sobrar tempo no dia 31.
