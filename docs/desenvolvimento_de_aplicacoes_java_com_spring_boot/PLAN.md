@@ -426,3 +426,148 @@ banco.
 **Próximo no dia 8:** entidades JPA (`ProjectJpaEntity` com `@OneToMany`, `Role`/`Route` com
 `@ManyToOne`, `AuditEventJpaEntity` + subclasses), `JpaRepository` com pelo menos uma consulta
 derivada (item 4 da Etapa 4), adapters implementando as portas e remoção dos `InMemory*`.
+
+### Situação em 31/08/2026 — dia da entrega
+
+Os dias 8, 9 e 10 foram executados em 31/08, no próprio dia do prazo. A **etapa 4 fechou**; o
+OpenFeign foi cortado, seguindo a "ordem de corte" definida neste plano.
+
+Como em 29/08, o código das camadas deste dia foi escrito com apoio de IA (Claude), o que extrapola o
+modo de trabalho combinado no início da disciplina ("Claude guia, Jairo codifica"). Registrado aqui
+para constar na citação de fontes exigida pelo enunciado.
+
+**Concluído — dia 8 (persistência JPA):**
+- `ProjectJpaEntity` com `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true)` para `RoleJpaEntity`
+  e `RouteJpaEntity`, ambas com `@ManyToOne` de volta.
+- `AuditEventJpaEntity` abstrata em `SINGLE_TABLE`, discriminada por `event_type`, com
+  `PermissionCheckEventJpaEntity` e `ProjectLifecycleEventJpaEntity` como `@DiscriminatorValue`.
+- `JpaProjectRepository` e `JpaAuditEventRepository` estendendo `JpaRepository`, com consultas
+  derivadas: `findByDeletedAtIsNullOrderByCreatedAtAsc`,
+  `findByDeletedAtIsNullAndNameContainingIgnoreCaseOrderByNameAsc`,
+  `findByClientIdAndDeletedAtIsNullOrderByCreatedAtAsc`, `findByIdAndDeletedAtIsNull`,
+  `findAllByOrderByOccurredAtDesc`, `findByProjectIdOrderByOccurredAtDesc`.
+- `ProjectRepositoryAdapter` e `AuditEventRepositoryAdapter` implementando as portas. O adapter de
+  projeto lê antes de gravar e sincroniza as coleções filhas **na instância gerenciada**, que é o que
+  o `orphanRemoval` exige.
+- `InMemoryProjectRepository` e `InMemoryAuditEventRepository` removidos (autorizado pelo enunciado da
+  Etapa 4; preservados na tag `etapa-3`).
+- `PurgeProjectUseCase` + `DELETE /projects/{id}/purge` — é o `deleteById` que a Etapa 4 pede, num uso
+  real, com cascata para cargos e rotas.
+- A decisão pendente do ADR-003 foi resolvida: **nenhuma das três opções foi necessária**. Como a
+  entidade JPA é classe separada da entidade de domínio, usa `@Id` atribuído (sem `@GeneratedValue`) e
+  não tem `@Version`, o conflito com o ADR-001 não se materializa. `Persistable` chegou a ser
+  implementado e foi removido — ver "Resolução na etapa 4" no ADR-003.
+
+**Concluído — dia 9:**
+- **`RoleRouteValidationHandler` com a regra real.** Nova porta `permission/domain/RouteAccessChecker`,
+  adapter `permission/infrastructure/ProjectRouteAccessChecker` e
+  `project/application/project/CheckRouteAccessUseCase`. Mesma forma de integração já usada com o
+  `billing`. Cinco motivos distintos de negativa, em vez de um `allow()` fixo.
+- `ValidatePermissionRequest` ganhou `projectId` (`@NotNull`) e `httpMethod` (`@Pattern` com os cinco
+  verbos), com `@Size`/`@Pattern` também em `role` e `route`. Isso fecha o achado nº 3 de 29/08: o
+  evento de auditoria não grava mais `httpMethod = null`.
+- `AuditEventJournal` + `AuditEventFileWriter`: cada validação também é gravada em
+  `logs/audit-events.txt`. O `AuditLogListener` grava pelas duas portas sem saber qual é banco e qual
+  é arquivo.
+- Documentação atualizada: `ARCHITECTURE.md` (mapa de módulos, fluxo, ADR-003 resolvido, ADR-005 e
+  ADR-006 novos, estrutura de pacotes), `API.md`, `DOMAIN.md`, `PATTERNS.md`, `TEST-ARCHITECTURE.md`.
+
+**Concluído — dia 10 (fechamento):**
+- `ProjectRepositoryAdapterIT` com 5 casos cobrindo o 1-N, o append em agregado já gravado, as duas
+  consultas derivadas e a cascata do `deleteById`.
+- Plugin **failsafe** adicionado ao `pom.xml`. Os testes `*IT` existiam mas nunca eram executados;
+  agora `./mvnw verify` roda a suíte inteira — 22 testes de unidade + 6 de integração, todos verdes.
+- `Dockerfile` deixou de usar `-DskipTests`: o build da imagem roda os testes.
+- Coleção Postman atualizada e re-executada com `newman`: **30 requisições, 39 asserções, 0 falhas**.
+- Verificação manual ponta a ponta contra PostgreSQL 16 com `ddl-auto: validate` — o mapeamento JPA
+  bate com as migrations Flyway `V1`–`V8` sem ajuste.
+
+**Mudanças de escopo decididas em 31/08:**
+
+1. **Seed e loaders de arquivo texto removidos do código final** (`ProjectFileLoader`,
+   `SeedFileException`, `ProjectSeedRunner`, `src/main/resources/data/*.txt`). Motivo e consequência em
+   `docs/ARCHITECTURE.md`, ADR-005. ⚠️ Os itens **4, 5, 7 e 8** da rubrica passam a ser evidenciados
+   **apenas pelas tags** `etapa-1` a `etapa-3`, não pelo `HEAD`.
+2. **Submódulos por entidade em todas as camadas do `project`** (`project/`, `role/`, `route/`),
+   espelhando o `billing`; `RoleController` e `RouteController` saíram do `ProjectController`, com as
+   mesmas URLs. Ver ADR-006.
+
+**Cortado, como previsto na "ordem de corte":**
+
+- **OpenFeign / `GeoLocationClient`** (item 16 da rubrica) — primeiro da lista de corte. Some-se a isso
+  que o projeto está em Spring Boot 4.1.0 e a versão de Spring Cloud compatível teria de ser validada,
+  risco alto para o tempo restante. `PermissionCheckEvent` já tem os campos `ipAddress` e `country`,
+  que é onde o cliente entraria — a lacuna é só o cliente HTTP.
+- **Front-end estático** (itens 11 e 12) — não houve tempo; segue como "Não incluído".
+- **Achados 1 e 2 de 29/08** (`POST /plans` devolvendo 200 em vez de 201, e 500 em nome duplicado) —
+  são do módulo `billing`, entregue na disciplina anterior. Ficam registrados como dívida.
+
+### Escopo acrescentado em 31/08 — `RoleRoute` (a regra de negócio de verdade)
+
+Durante a revisão da entrega ficou claro que a validação de permissão ainda não respondia à pergunta
+que o produto vende: **o cargo X pode acessar a rota Y no projeto Z?** Faltava a associação entre
+`Role` e `Route`. Foi implementada no mesmo dia.
+
+**Modelo:**
+
+```
+Project 1 ──── N Role  1 ──── N RoleRoute
+Project 1 ──── N Route 1 ──── N RoleRoute
+```
+
+`RoleRoute` é **entidade associativa com histórico** (`grantedAt` / `revokedAt`), não tabela de
+junção. Revogar fecha a linha em vez de apagá-la, e é isso que permite à auditoria responder *quando*
+um cargo deixou de poder acessar uma rota. Decisão completa em `docs/ARCHITECTURE.md`, ADR-007.
+
+**Entregue:**
+- Migration `V9__create_role_routes_table.sql`, com FK para `roles` e `routes` (`ON DELETE CASCADE`)
+  e o índice único **parcial** `uq_role_routes_active ... WHERE revoked_at IS NULL`, que garante no
+  máximo uma concessão ativa por par sem impedir o empilhamento de histórico.
+- `project/domain/roleroute/` — `RoleRoute` + três exceções de domínio.
+  `Project.grantRouteToRole()`, `Project.revokeRouteFromRole()` e `Project.allows()`; `Role` passou a
+  carregar `List<RoleRoute> permissions`, com `hasActiveAccessTo()` e `activePermissions()`.
+- `RoleRouteJpaEntity` com `@ManyToOne` para `Role` **e** para `Route`; `RoleJpaEntity` ganhou o
+  `@OneToMany` com cascata e o `RouteJpaEntity` o inverso somente leitura.
+- Use cases `GrantRouteToRoleUseCase`, `RevokeRouteFromRoleUseCase`, `FindRolePermissionsUseCase` e o
+  `RoleRouteController` (`POST`/`DELETE`/`GET` em
+  `/projects/{projectId}/roles/{roleId}/routes/{routeId}`, com `?includeRevoked=true` para o histórico).
+- `CheckRouteAccessUseCase` ganhou o resultado `ROLE_HAS_NO_ACCESS_TO_ROUTE`, que vira a negativa
+  `role has no active grant on this route` no `RoleRouteValidationHandler`.
+- `RoleResponse` passou a expor as concessões ativas, então `GET /projects/{id}` mostra o grafo
+  `Project → Role → RoleRoute` inteiro numa resposta só.
+
+**Bug encontrado e corrigido pelos testes de integração:** um agregado que **nasce** com concessões
+falhava no primeiro `save()` com `ObjectRetrievalFailureException` — a `RoleRouteJpaEntity` aponta para
+a `RouteJpaEntity` por `@ManyToOne` sem cascata, e a rota ainda era transiente. O adapter passou a
+gravar em duas etapas dentro da mesma transação: esqueleto primeiro, concessões depois. Pela API o
+problema não aparecia, porque rota e concessão chegam em requisições separadas.
+
+**Verificação final:**
+- `./mvnw verify` — 22 testes de unidade + **9** de integração, 0 falhas.
+- Coleção Postman com uma pasta nova ("Role x Route — concessão e histórico"):
+  **42 requisições, 60 asserções, 0 falhas** no `newman`.
+- Fluxo conferido contra PostgreSQL 16: sem concessão o acesso é negado; concedido, é permitido;
+  revogado, volta a ser negado; e a tabela `role_routes` fica com as duas linhas do histórico.
+
+Com isso o item "`Role`↔`Route` N-N" sai de "trabalho futuro" e entra na entrega.
+
+### Refinamento final de 31/08 — mappers de persistência por submódulo
+
+Revisão de código antes do fechamento apontou duas coisas no `ProjectRepositoryAdapter`, ambas
+corrigidas:
+
+1. **Helpers genéricos demais.** Havia um `index(List<T>, Function<T, UUID>)` e um
+   `ids(List<T>, Function<T, UUID>)` montando `Map`/`Set` para casar as listas por id. Trocados por
+   cinco buscas com nome (`findRoleEntity`, `findRouteEntity`, `findRole`, `findRoute`,
+   `findPermission`). Ficou O(n²) em vez de O(n), o que é irrelevante na escala de um projeto (poucas
+   dezenas de cargos e rotas) e deixa o código legível sem conhecer `Function`.
+2. **O adapter traduzia entidades que não são dele.** A tradução saiu para um mapper por submódulo —
+   `ProjectJpaMapper`, `RoleJpaMapper`, `RouteJpaMapper`, `RoleRouteJpaMapper` —, cada um no pacote da
+   sua entidade, como manda o ADR-006. O adapter ficou só com a orquestração do agregado e as
+   consultas, caindo de 317 para 195 linhas.
+
+A divisão de responsabilidade está documentada em `docs/ARCHITECTURE.md`, seção "Mapper de
+persistência × adapter — quem faz o quê".
+
+Reverificado depois das duas mudanças: `./mvnw verify` com 22 testes de unidade + 9 de integração e a
+coleção Postman com 42 requisições / 60 asserções, tudo sem falha.

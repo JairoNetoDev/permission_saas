@@ -28,6 +28,14 @@
     {
       "key": "errorProjectId",
       "value": ""
+    },
+    {
+      "key": "roleId",
+      "value": ""
+    },
+    {
+      "key": "routeId",
+      "value": ""
     }
   ],
   "item": [
@@ -246,7 +254,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('roleId', pm.response.json().id);"
                 ]
               }
             }
@@ -284,14 +293,49 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('routeId', pm.response.json().id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "8. Validar permissao (permitido)",
+          "name": "8. Conceder a rota ao cargo (RoleRoute)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('concessao ativa', () => pm.expect(pm.response.json().active).to.eql(true));",
+                  "pm.test('sem data de revogacao', () => pm.expect(pm.response.json().revokedAt).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes/{{routeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes",
+                "{{routeId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "9. Validar permissao (permitido)",
           "request": {
             "method": "POST",
             "header": [
@@ -302,7 +346,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"apiKey\": \"{{apiKey}}\",\n  \"role\": \"ADMIN\",\n  \"route\": \"/users\"\n}"
+              "raw": "{\n  \"apiKey\": \"{{apiKey}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"role\": \"ADMIN\",\n  \"httpMethod\": \"GET\",\n  \"route\": \"/users\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/validate-permission",
@@ -329,7 +373,20 @@
           ]
         },
         {
-          "name": "9. Validar permissao (negado)",
+          "name": "10. Validar permissao (negado — ApiKey invalida)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('negado', () => pm.expect(pm.response.json().granted).to.eql(false));",
+                  "pm.test('motivo correto', () => pm.expect(pm.response.json().reason).to.eql('invalid or inactive api key'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -340,7 +397,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"apiKey\": \"chave-invalida\",\n  \"role\": \"GUEST\",\n  \"route\": \"/admin\"\n}"
+              "raw": "{\n  \"apiKey\": \"chave-invalida\",\n  \"projectId\": \"{{projectId}}\",\n  \"role\": \"ADMIN\",\n  \"httpMethod\": \"GET\",\n  \"route\": \"/users\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/validate-permission",
@@ -351,7 +408,10 @@
                 "validate-permission"
               ]
             }
-          },
+          }
+        },
+        {
+          "name": "11. Validar permissao (negado — rota nao cadastrada)",
           "event": [
             {
               "listen": "test",
@@ -359,14 +419,151 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                  "pm.test('negado', () => pm.expect(pm.response.json().granted).to.eql(false));"
+                  "pm.test('negado', () => pm.expect(pm.response.json().granted).to.eql(false));",
+                  "pm.test('motivo correto', () => pm.expect(pm.response.json().reason).to.eql('route not registered in the project'));"
                 ]
               }
             }
-          ]
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"{{apiKey}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"role\": \"ADMIN\",\n  \"httpMethod\": \"GET\",\n  \"route\": \"/relatorios\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/validate-permission",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validate-permission"
+              ]
+            }
+          }
         },
         {
-          "name": "10. Consultar a trilha de auditoria",
+          "name": "12. Validar permissao (negado — cargo nao cadastrado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('negado', () => pm.expect(pm.response.json().granted).to.eql(false));",
+                  "pm.test('motivo correto', () => pm.expect(pm.response.json().reason).to.eql('role not registered in the project'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"{{apiKey}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"role\": \"FINANCEIRO\",\n  \"httpMethod\": \"GET\",\n  \"route\": \"/users\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/validate-permission",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validate-permission"
+              ]
+            }
+          }
+        },
+        {
+          "name": "12b. Setup — cargo sem nenhuma concessao",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"SEM_ACESSO\",\n  \"description\": \"Cargo criado sem concessao de rota\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "13. Validar permissao (negado — cargo sem concessao na rota)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('negado', () => pm.expect(pm.response.json().granted).to.eql(false));",
+                  "pm.test('motivo correto', () => pm.expect(pm.response.json().reason).to.eql('role has no active grant on this route'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"{{apiKey}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"role\": \"SEM_ACESSO\",\n  \"httpMethod\": \"GET\",\n  \"route\": \"/users\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/validate-permission",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validate-permission"
+              ]
+            }
+          }
+        },
+        {
+          "name": "14. Consultar a trilha de auditoria",
           "request": {
             "method": "GET",
             "header": [],
@@ -393,6 +590,312 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Role x Route (concessao e historico)",
+      "item": [
+        {
+          "name": "409 — conceder a mesma rota duas vezes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes/{{routeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes",
+                "{{routeId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "404 — conceder uma rota inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes/99999999-9999-9999-9999-999999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes",
+                "99999999-9999-9999-9999-999999999999"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar as concessoes ativas do cargo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('uma concessao ativa', () => pm.expect(pm.response.json().length).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "204 — revogar a concessao",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes/{{routeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes",
+                "{{routeId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "404 — revogar de novo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes/{{routeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes",
+                "{{routeId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Concessoes ativas apos a revogacao",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('nenhuma concessao ativa', () => pm.expect(pm.response.json().length).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Historico preserva a concessao revogada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('a linha revogada continua no historico', () => pm.expect(pm.response.json().length).to.eql(1));",
+                  "pm.test('com data de revogacao', () => pm.expect(pm.response.json()[0].revokedAt).to.not.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes?includeRevoked=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes"
+              ],
+              "query": [
+                {
+                  "key": "includeRevoked",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "201 — conceder de novo apos revogar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes/{{routeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes",
+                "{{routeId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Historico agora tem duas linhas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('duas concessoes no historico', () => pm.expect(pm.response.json().length).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/roles/{{roleId}}/routes?includeRevoked=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "roles",
+                "{{roleId}}",
+                "routes"
+              ],
+              "query": [
+                {
+                  "key": "includeRevoked",
+                  "value": "true"
+                }
+              ]
+            }
+          }
         }
       ]
     },
@@ -842,6 +1345,64 @@
               }
             }
           ]
+        },
+        {
+          "name": "204 — remover definitivamente o projeto de testes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{errorProjectId}}/purge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{errorProjectId}}",
+                "purge"
+              ]
+            }
+          }
+        },
+        {
+          "name": "404 — remover definitivamente um projeto inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{errorProjectId}}/purge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{errorProjectId}}",
+                "purge"
+              ]
+            }
+          }
         }
       ]
     },
