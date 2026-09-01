@@ -571,3 +571,9 @@ persistência × adapter — quem faz o quê".
 
 Reverificado depois das duas mudanças: `./mvnw verify` com 22 testes de unidade + 9 de integração e a
 coleção Postman com 42 requisições / 60 asserções, tudo sem falha.
+
+### Trabalho futuro identificado após a entrega
+
+- **`userId` em `PermissionCheckEvent`** — a trilha registra o cargo que tentou o acesso, mas não a
+  pessoa. Desenho, decisões pendentes e os seis pontos que a mudança toca estão em `docs/DOMAIN.md`,
+  seção "Planejado". Fora do escopo desta disciplina; a tag `etapa-4` não muda por causa disso.
