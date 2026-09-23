@@ -124,14 +124,14 @@ Detalhe de todos os endpoints, request/response e exemplos: [`docs/API.md`](docs
 Monolito modular: um único deploy, organizado por módulo de domínio, cada um com
 `domain` / `application` / `infrastructure` / `api`.
 
-| Módulo        | Responsabilidade                                                                | Status                                                  |
-| -------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `shared`     | Configs globais,`Mapper<I,O>`, `PingController`                             | ✅                                                      |
-| `identity`   | Cadastro e consulta de`Client`                                                | ✅                                                      |
-| `billing`    | Plano, Assinatura e geração de ApiKey (pagamento simulado)                    | ✅                                                      |
-| `permission` | 🔑 Núcleo — middleware de validação de permissão (Chain of Responsibility) | ✅ (validação de ApiKey real; ver limitação abaixo) |
-| `project`    | Projeto/Cargo/Rota respeitando limite do plano                                  | 🚧 em desenvolvimento                                   |
-| `audit`      | Trilha de auditoria das validações, via Observer                              | 🚧 em desenvolvimento                                   |
+| Módulo       | Responsabilidade                                                          | Status |
+| ------------ | ------------------------------------------------------------------------- | ------ |
+| `shared`     | Configuração global, `Mapper<I,O>`, tratamento de exceções, `PingController` | ✅     |
+| `identity`   | Cadastro e consulta de `Client`                                           | ✅     |
+| `billing`    | Plano, Assinatura e geração de ApiKey (pagamento simulado)                | ✅     |
+| `permission` | 🔑 Núcleo — middleware de validação de permissão (Chain of Responsibility) | ✅     |
+| `project`    | Projeto/Cargo/Rota e concessões de rota por cargo, respeitando o limite do plano | ✅     |
+| `audit`      | Trilha de auditoria das validações, via Observer                          | ✅     |
 
 Os módulos só conversam por use cases ou eventos — nunca pelo repositório de outro
 módulo. Essa fronteira é verificada pelo Spring Modulith: `./mvnw test` falha se
@@ -140,14 +140,97 @@ alguém importar um pacote interno de outro módulo.
 Detalhes de camadas, regras de comunicação entre módulos e ADRs:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+### Módulos e responsabilidades
+
+**`identity` — quem é o cliente.** Cadastra e consulta o `Client`, a empresa que
+contrata o SaaS. É a porta de entrada: sem um cliente cadastrado não há assinatura,
+e sem assinatura não há ApiKey. Não conhece plano, projeto nem permissão.
+
+**`billing` — o que o cliente comprou.** Cuida de `Plan` e `Subscription` e é o único
+lugar que emite e ativa uma `ApiKey`. Concentra também o pagamento, hoje simulado
+atrás da porta `PaymentGateway`. Responde a uma pergunta que o resto do sistema faz o
+tempo todo: *esta ApiKey existe e está ativa?*
+
+**`project` — o que o cliente configurou.** Guarda o `Project` do cliente, seus
+cargos (`Role`), suas rotas (`Route`) e, entre eles, o `RoleRoute` — a concessão que
+diz quais rotas cada cargo alcança, com histórico de concessão e revogação. É aqui
+que vive a regra de negócio que a validação consulta.
+
+**`permission` — o núcleo.** Expõe o único endpoint que o cliente chama em produção
+(`POST /validate-permission`) e decide se uma requisição passa. A decisão é uma
+cadeia de responsabilidade: cada handler verifica uma preocupação e delega adiante.
+Não tem tabela própria — pergunta aos outros módulos.
+
+**`audit` — o que aconteceu.** Registra cada validação de permissão em uma trilha
+append-only, no banco e em arquivo texto. Nasce de um evento publicado pelo
+`permission` e não devolve nada a ninguém.
+
+**`shared` — o que é de todos.** Configuração de segurança e Swagger, `Mapper<I,O>`,
+`DomainException` e o `GlobalExceptionHandler` que centraliza o tratamento de erro.
+Não tem regra de negócio.
+
+### Dependências entre os módulos
+
+Medido pelos imports entre pacotes de módulos diferentes:
+
+```
+identity   → shared
+billing    → identity, shared
+project    → shared
+permission → billing, project, shared
+audit      → permission (apenas o record do evento), shared
+```
+
+Duas dependências concretas, ambas no caminho crítico da validação de permissão:
+
+**`permission` → `billing`.** Para aceitar uma requisição é preciso saber se a ApiKey
+existe e está ativa. O `permission` não enxerga a tabela do `billing`: declara a porta
+`ApiKeyValidator` no próprio domínio, e o adapter `BillingApiKeyValidator` chama o use
+case `FindActiveApiKeyByPlainKeyUseCase`. Quem consome é o `ApiKeyValidationHandler`.
+
+**`permission` → `project`.** Para decidir se o cargo alcança a rota é preciso
+consultar as concessões do projeto. Mesmo desenho: porta `RouteAccessChecker` no
+domínio, adapter `ProjectRouteAccessChecker` chamando `CheckRouteAccessUseCase`, e o
+`RoleRouteValidationHandler` como consumidor.
+
+As duas são **síncronas e acontecem dentro da requisição**: se qualquer uma falhar, a
+validação não tem resposta para dar. É exatamente o que as separa do `audit`.
+
+Uma terceira dependência, de natureza diferente: **`audit` → `permission`**. O
+`ValidatePermissionUseCase` publica um `PermissionValidatedEvent` e segue seu caminho;
+o `AuditLogListener` reage a ele. A seta aponta para dentro do `audit` e nada volta.
+
+### Candidato a serviço independente: `audit`
+
+**Responsabilidade.** Registrar a trilha de auditoria das validações de permissão —
+projeto, rota, cargo, data, resultado e motivo — e permitir consultá-la depois.
+
+**Quem depende dele hoje.** Nenhum módulo. É a resposta incômoda e é justamente o
+argumento: `grep` por imports de `com.saas.permissions.audit` fora do próprio módulo
+não retorna nada. O acoplamento existe na direção oposta e por evento — um único
+publisher (`ValidatePermissionUseCase`) e um único consumidor (`AuditLogListener`),
+sem valor de retorno. Nenhuma regra de negócio lê da auditoria para decidir algo.
+
+**Por que poderia rodar separado.**
+
+- A trilha é *append-only*: grava-se muito e lê-se raramente, para conferência.
+- O acoplamento já é o mais fraco do projeto — um evento assíncrono por natureza,
+  hoje entregue em processo.
+- Os dados são próprios (`audit_events`) e **sem chave estrangeira** para as tabelas
+  dos outros módulos, então separar o banco não quebra integridade referencial.
+- Cresce por um motivo diferente do resto: cada validação de permissão gera um
+  registro, enquanto o cadastro de projetos é esporádico. Escala independente.
+
+**Por contraste, o que não deve sair.** Extrair `billing` seria o oposto: o
+`ApiKeyValidationHandler` depende dele *dentro* da requisição, e a separação
+transformaria uma chamada de método em ponto de falha no caminho crítico.
+
 ### Limitação conhecida
 
-Em `permission`, só o `ApiKeyValidationHandler` aplica uma regra real (valida a
-ApiKey contra `billing`). `TokenValidationHandler` e `RoleRouteValidationHandler`
-sempre concedem: o primeiro depende de um 2º fator de autenticação, ainda não
-previsto; o segundo depende do módulo `project`, que está sendo implementado agora
-— quando `Role` e `Route` existirem, a regra real entra nesse handler sem tocar nos
-demais.
+Em `permission`, o `TokenValidationHandler` ainda é um stub documentado que sempre
+concede: depende de um 2º fator de autenticação, fora do escopo até aqui. Os outros
+dois handlers aplicam regra real — `ApiKeyValidationHandler` valida a ApiKey contra o
+`billing` e `RoleRouteValidationHandler` verifica a concessão de rota no `project`.
 
 ---
 
@@ -158,8 +241,8 @@ demais.
 | Factory Method          | `ApiKeyFactory` — centraliza a estratégia de geração da ApiKey                   | ✅     |
 | Adapter                 | `FakePaymentGatewayAdapter` — adapta o gateway simulado à porta `PaymentGateway` | ✅     |
 | Chain of Responsibility | Handlers de validação de permissão, um por preocupação                            | ✅     |
-| Builder                 | `ProjectBuilder` — monta `Project` com cargos e rotas passo a passo               | 🚧     |
-| Observer                | `AuditLogListener` — reage à validação de permissão sem acoplar os módulos     | 🚧     |
+| Observer                | `AuditLogListener` — reage à validação de permissão sem acoplar os módulos       | ✅     |
+| Builder                 | `ProjectBuilder` — descartado: `@Builder` do Lombok mais `addRole`/`addRoute` já cobrem o caso | ⛔     |
 
 Onde cada padrão vive, por que foi escolhido e como estender:
 [`docs/PATTERNS.md`](docs/PATTERNS.md). Mapeamento dos 5 princípios SOLID:
@@ -170,14 +253,18 @@ Onde cada padrão vive, por que foi escolhido e como estender:
 ## Escopo
 
 **Implementado:** cadastro de cliente, assinatura de plano com pagamento simulado e
-geração de ApiKey, middleware de validação de permissão.
+geração de ApiKey, middleware de validação de permissão aplicando a regra real
+(o cargo precisa de uma concessão ativa sobre a rota), CRUD de projeto/cargo/rota com
+histórico de concessão e revogação, e trilha de auditoria em banco e arquivo texto.
 
-**Em desenvolvimento:** módulos `project` (Projeto/Cargo/Rota respeitando o limite do
-plano) e `audit` (trilha de auditoria de cada validação, com projeto, rota, cargo,
-data, resultado e motivo), além de integração com API externa via OpenFeign.
+**Em desenvolvimento:** extração do `audit` para um serviço Spring Boot independente,
+comunicação por OpenFeign, configuração centralizada, mensageria e processamento em
+lote — o escopo da disciplina de microsserviços, descrito em
+[Evolução](#evolução).
 
 **Trabalho futuro:** gateway de pagamento real, autenticação/JWT com Spring Security,
-exportação CSV/JSON, front-end, processamento assíncrono da auditoria.
+exportação CSV/JSON, front-end, `userId` no evento de auditoria e uma aplicação
+cliente de demonstração consumindo o `POST /validate-permission`.
 
 ---
 
@@ -190,7 +277,11 @@ distinguir o que já existia do que foi construído em cada momento.
 | Disciplina                                                                                                             | Período        | O que acrescentou                                                                                                                                            | Marcos                                           |
 | ---------------------------------------------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
 | [Clean Code e Padrões de Projeto](docs/clean_code_e_padroes_de_projeto/PLAN.md)                                        | até 05/07/2026 | Módulos`shared`, `identity`, `billing` e `permission`; Factory Method, Adapter e Chain of Responsibility; fronteiras de módulo com Spring Modulith | —                                               |
-| [Desenvolvimento de aplicações Java com Spring Boot](docs/desenvolvimento_de_aplicacoes_java_com_spring_boot/PLAN.md) | até 24/08/2026 | Módulos`project` e `audit`, CRUD REST completo, relacionamentos e herança JPA, leitura de arquivos texto, OpenFeign                                    | tags`etapa-1` … `etapa-4` (em construção) |
+| [Desenvolvimento de aplicações Java com Spring Boot](docs/desenvolvimento_de_aplicacoes_java_com_spring_boot/PLAN.md) | até 31/08/2026 | Módulos `project` e `audit`, CRUD REST completo, relacionamentos e herança JPA, leitura de arquivos texto | tags `etapa-1` … `etapa-4` |
+| [Arquiteturas avançadas de software com microsserviços e Spring Framework](docs/arquiteturas_avancadas_de_software_com_microsservicos_e_spring_framework/PLAN.md) | até 05/10/2026 | `audit` extraído como serviço independente, OpenFeign, Config Server, banco por serviço, RabbitMQ e Spring Batch | tags `arq-etapa-1` … `arq-etapa-4` (em construção) |
+
+As tags desta disciplina usam o prefixo `arq-` porque `etapa-1` … `etapa-4` já
+apontam para a evidência da disciplina anterior e não podem ser movidas.
 
 O relatório escrito da primeira disciplina foi entregue como PDF no Moodle e não está
 versionado aqui.
