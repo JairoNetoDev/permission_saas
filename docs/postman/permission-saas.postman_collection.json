@@ -139,8 +139,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// POST /plans devolve 200, e nao 201 como os demais recursos — ver docs/API.md",
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
                   "pm.collectionVariables.set('planId', pm.response.json().id);"
                 ]
               }
