@@ -263,8 +263,10 @@ lote — o escopo da disciplina de microsserviços, descrito em
 [Evolução](#evolução).
 
 **Trabalho futuro:** gateway de pagamento real, autenticação/JWT com Spring Security,
-exportação CSV/JSON, front-end, `userId` no evento de auditoria e uma aplicação
-cliente de demonstração consumindo o `POST /validate-permission`.
+exportação CSV/JSON, front-end, `userId` no evento de auditoria, uma aplicação
+cliente de demonstração consumindo o `POST /validate-permission` e a renomeação desse
+endpoint para `POST /permissions/validate`, que alinharia o recurso ao restante da API
+(ver a nota de contrato em [`docs/API.md`](docs/API.md)).
 
 ---
 
