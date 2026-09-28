@@ -1500,6 +1500,206 @@
               }
             }
           ]
+        },
+        {
+          "name": "Filtrar por periodo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?from=2026-01-01T00:00:00Z&to=2099-12-31T23:59:59Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-01-01T00:00:00Z"
+                },
+                {
+                  "key": "to",
+                  "value": "2099-12-31T23:59:59Z"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('todos os eventos dentro do periodo', () => {",
+                  "    const from = new Date('2026-01-01T00:00:00Z');",
+                  "    const to = new Date('2099-12-31T23:59:59Z');",
+                  "    pm.response.json().forEach(e => {",
+                  "        const at = new Date(e.occurredAt);",
+                  "        pm.expect(at >= from && at <= to).to.be.true;",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Negadas a partir de uma data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?onlyDenied=true&from=2026-01-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ],
+              "query": [
+                {
+                  "key": "onlyDenied",
+                  "value": "true"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-01-01T00:00:00Z"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('so validacoes negadas', () => {",
+                  "    pm.response.json().forEach(e => {",
+                  "        pm.expect(e.type).to.eql('PERMISSION_CHECK');",
+                  "        pm.expect(e.description).to.match(/^NEGADO/);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tipo em minusculas e aceito",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?type=permission_check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "permission_check"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('filtro aplicado como PERMISSION_CHECK', () => {",
+                  "    pm.response.json().forEach(e => pm.expect(e.type).to.eql('PERMISSION_CHECK'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "onlyDenied com PROJECT_LIFECYCLE devolve vazio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?onlyDenied=true&type=PROJECT_LIFECYCLE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ],
+              "query": [
+                {
+                  "key": "onlyDenied",
+                  "value": "true"
+                },
+                {
+                  "key": "type",
+                  "value": "PROJECT_LIFECYCLE"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('lista vazia: ciclo de vida nunca e negado', () => pm.expect(pm.response.json()).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 — periodo invertido (from depois de to)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?from=2026-09-20T00:00:00Z&to=2026-09-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-09-20T00:00:00Z"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-09-01T00:00:00Z"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mensagem cita o periodo', () => pm.expect(pm.response.json().message).to.include('Invalid audit period'));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
