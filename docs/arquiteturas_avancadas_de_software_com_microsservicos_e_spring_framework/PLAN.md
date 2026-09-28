@@ -47,7 +47,7 @@ do que já foi entregue é reescrito.
 | 13, 14 — produtor, fila e consumidor de mensagens                                | ❌ inexistente (hoje o Observer é síncrono, em processo)                                                                                             |
 | 15 — Job Spring Batch com chunks                                                 | ❌ inexistente                                                                                                                                         |
 | 16 — quando usar REST, mensageria ou Batch                                       | ❌ reflexão não escrita                                                                                                                              |
-| Tags de marco                                                                     | ⚠️ conflito de nomes — ver Decisão 4                                                                                                               |
+| Tags de marco                                                                     | ✅ `arq-etapa-1` … `arq-etapa-4` — ver Decisão 4 |
 
 ---
 
@@ -91,10 +91,9 @@ do que já foi entregue é reescrito.
    existem** apontando para a disciplina de Spring Boot. Mover qualquer uma delas destrói a
    evidência já avaliada.
 
-   - **Proposta:** `arq-etapa-1` … `arq-etapa-4`, com uma tabela no `README.md` ligando cada tag ao
-     marco correspondente da disciplina.
-   - **Confirmar com o professor** na primeira oportunidade. Se ele exigir os nomes literais, a
-     alternativa é `etapa-1-microsservicos` … — nunca reapontar as antigas.
+   - **Decidido em 28/09/2026:** `arq-etapa-1` … `arq-etapa-4`, com uma tabela no `README.md`
+     ligando cada tag ao marco correspondente da disciplina. `arq-etapa-1` foi a primeira criada.
+   - As tags antigas `etapa-1` … `etapa-4` nunca são reapontadas.
 5. **A consulta de auditoria continua exposta pela aplicação principal, como proxy Feign.** Ao
    extrair o `audit`, a aplicação principal mantém um `GET /audit-events` que **não toca banco**:
    delega ao `audit-service` pelo `AuditClient`. É o desenho que a Etapa 2 pede
