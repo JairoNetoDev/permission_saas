@@ -225,6 +225,20 @@ sem valor de retorno. Nenhuma regra de negócio lê da auditoria para decidir al
 `ApiKeyValidationHandler` depende dele *dentro* da requisição, e a separação
 transformaria uma chamada de método em ponto de falha no caminho crítico.
 
+### Consultas Spring Data
+
+Além do CRUD do `JpaRepository`, as consultas que o domínio pede:
+
+- **`project` — consultas derivadas.** Projetos ativos por nome
+  (`findByDeletedAtIsNullAndNameContainingIgnoreCaseOrderByNameAsc`), por cliente
+  (`findByClientIdAndDeletedAtIsNullOrderByCreatedAtAsc`) e a busca por id que
+  ignora os excluídos (`findByIdAndDeletedAtIsNull`).
+- **`audit` — JPQL com filtros opcionais.** `search` filtra a trilha por tipo,
+  projeto e período; `searchDenied` devolve só as validações negadas, por projeto e
+  período, apoiada no índice parcial `idx_audit_events_denied`. Na disciplina anterior
+  esses filtros rodavam em memória; como a trilha só cresce, desceram para o banco —
+  decisão e detalhes no ADR-009 de [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ### Limitação conhecida
 
 Em `permission`, o `TokenValidationHandler` ainda é um stub documentado que sempre

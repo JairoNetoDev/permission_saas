@@ -165,8 +165,8 @@ Aplicação Principal → permissions_saas      audit-service → audit_db
 | Dia | Data      | Horas | Entrega                                                                                                                                                                                                                                                                      |
 | --- | --------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1 ✅ | Ter 22/09 | 1h    | **Feito em 23/09.** `README.md`: apresentação dos módulos e responsabilidades, análise de dependências (ex.: `permission → project` via `RouteAccessChecker`, `permission → billing` via `ApiKeyValidator`) e justificativa do `audit` como candidato a serviço independente |
-| 2   | Qua 23/09 | 1h    | Duas consultas Spring Data novas e coerentes com o domínio (negativas por período em`audit`, rotas por método/`path` em `project`) + testes; varredura de Bean Validation nos DTOs que ainda não validam                                                           |
-| 3   | Qui 24/09 | 1h    | Anotações Swagger (`@Tag`, `@Operation`, `@ApiResponse`) nos controllers que faltam; **ADR-008** (layout de vários projetos no mesmo repositório) → **tag `arq-etapa-1`**                                                                           |
+| 2 ✅ | Qua 23/09 | 1h    | **Feito em 28/09, com ajuste de escopo.** Duas consultas JPQL no `audit` — `search` (tipo, projeto, período) e `searchDenied` (negadas por projeto e período) —, com a filtragem saindo da memória para o banco (**ADR-009**); verificadas contra o PostgreSQL real. Ficaram de fora: a consulta de rotas por método/`path` (as rotas vivem dentro do agregado `Project`, ADR-006, e um repositório só de rotas quebraria esse desenho), o teste de integração das consultas (vai para o `audit-service`) e a varredura dos `@Size` que faltam em `RegisterClientRequest`/`RegisterPlanRequest` (buffer do dia 14). De carona: Queries separadas dos Commands em `application/query/` (`docs/PATTERNS.md`) |
+| 3 ✅ | Qui 24/09 | 1h    | **Feito em 25/09.** Anotações Swagger (`@Tag`, `@Operation`, `@ApiResponse`) nos controllers que faltavam; **ADR-008** (layout de vários projetos no mesmo repositório). **Tag `arq-etapa-1`** criada no fechamento do dia 2, em 28/09                                                                           |
 
 ### Etapa 2 — Separação e Comunicação (25–28/09)
 
@@ -197,6 +197,27 @@ Aplicação Principal → permissions_saas      audit-service → audit_db
 Total planejado: **~24h em 14 dias**. O caminho crítico é o fim de semana de 26–27/09 (extração +
 Feign): sem ele caem de uma vez os itens 5, 6, 7 e 8 da rubrica, e as Etapas 3 e 4 ficam sem o
 segundo serviço para configurar, containerizar e alimentar por fila.
+
+### Replanejamento em 28/09
+
+A Etapa 1 fechou com quatro dias de atraso e o fim de semana de 26–27/09 não entregou a extração.
+Os dias restantes ficam assim; as tabelas acima continuam valendo como descrição do conteúdo de
+cada dia.
+
+| Data | Dias do plano | Entrega |
+|---|---|---|
+| Seg 28/09 | 2 | Consultas do `audit`, documentação, tag `arq-etapa-1` |
+| Ter 29 – Qua 30/09 | 4, 5 e 9 | `audit-service`: esqueleto, `POST`/`GET /audit-events`, banco próprio desde o início |
+| Qui 01/10 | 6 e 7 | Feign, indisponibilidade, testes pelo Postman/Swagger, tag `arq-etapa-2` |
+| Sex 02/10 | 8 e 11 | Profiles, variáveis de ambiente, `Dockerfile` e Compose, tag `arq-etapa-3` |
+| Sáb 03 – Dom 04/10 | 12 e 13 | RabbitMQ e Batch, tag `arq-etapa-4`; Config Server (dia 10) só se sobrar tempo |
+| Seg 05/10 | 14 | Buffer, seção **Uso de IA**, entrega |
+
+O banco próprio do `audit-service` (dia 9) sobe para a criação do serviço: nascer com `audit_db`
+custa menos do que migrar depois. **Testes automatizados** das partes novas saem do caminho
+crítico — a rubrica não pontua testes JUnit, e as demonstrações que ela pede (Postman/Swagger,
+serviço fora do ar, fila com consumidor parado) são manuais. Ficam como trabalho futuro, a começar
+pelo teste de integração das consultas do ADR-009.
 
 ### Ordem de corte, se atrasar
 
