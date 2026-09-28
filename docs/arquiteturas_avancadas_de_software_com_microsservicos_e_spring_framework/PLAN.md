@@ -91,7 +91,7 @@ do que já foi entregue é reescrito.
    existem** apontando para a disciplina de Spring Boot. Mover qualquer uma delas destrói a
    evidência já avaliada.
 
-   - **Decidido em 28/09/2026:** `arq-etapa-1` … `arq-etapa-4`, com uma tabela no `README.md`
+   - **Aprovado pelo professor em 28/09/2026:** `arq-etapa-1` … `arq-etapa-4`, com uma tabela no `README.md`
      ligando cada tag ao marco correspondente da disciplina. `arq-etapa-1` foi a primeira criada.
    - As tags antigas `etapa-1` … `etapa-4` nunca são reapontadas.
 5. **A consulta de auditoria continua exposta pela aplicação principal, como proxy Feign.** Ao
@@ -106,7 +106,7 @@ do que já foi entregue é reescrito.
      `audit-service` parado, a consulta degrada com resposta amigável enquanto o
      `POST /validate-permission` continua respondendo;
    - **é barato**: um controller fino, sem banco, sem projeto novo.
-6. **Mensageria: RabbitMQ** (confirmar se o professor define outra). Produtor na aplicação
+6. **Mensageria: RabbitMQ** (confirmado com o professor em 28/09/2026). Produtor na aplicação
    principal, fila `audit.events`, consumidor no `audit-service`. Na Etapa 2 a gravação de
    auditoria passa por Feign (síncrona); na Etapa 4 ela migra para a fila, e o Feign permanece
    para a **consulta** (`GET /audit-events`). Isso dá à Etapa 4 uma comparação real entre os dois
