@@ -108,10 +108,17 @@ do que já foi entregue é reescrito.
      `POST /validate-permission` continua respondendo;
    - **é barato**: um controller fino, sem banco, sem projeto novo.
 6. **Mensageria: RabbitMQ** (confirmado com o professor em 28/09/2026). Produtor na aplicação
-   principal, fila `audit.events`, consumidor no `audit-service`. Na Etapa 2 a gravação de
+   principal, fila `audit.events`, consumidor no `audit-service`. **Quem publica na fila é a aplicação
+   principal, direto no RabbitMQ** — e não o `audit-service` enfileirando o que recebe por HTTP: com
+   a fila atrás do serviço, a aplicação principal continuaria esperando a resposta HTTP e perderia o
+   evento com o serviço fora do ar; com o broker entre os dois, a mensagem espera na fila até o
+   consumidor voltar. Na Etapa 2 a gravação de
    auditoria passa por Feign (síncrona); na Etapa 4 ela migra para a fila, e o Feign permanece
    para a **consulta** (`GET /audit-events`). Isso dá à Etapa 4 uma comparação real entre os dois
-   estilos dentro do mesmo domínio, em vez de dois mecanismos desconexos.
+   estilos dentro do mesmo domínio, em vez de dois mecanismos desconexos. A reflexão da Etapa 4
+   parte do que a Etapa 2 mostrar na prática — com o `audit-service` fora do ar, a validação espera
+   o timeout do Feign e o evento de auditoria se perde —, e a fila entra como a evolução que resolve
+   essa dor, não como requisito cumprido.
 7. **Batch: importação de rotas por CSV.** Um cliente que migra sua API para o SaaS precisa
    cadastrar dezenas de rotas de uma vez — é a operação do domínio que naturalmente é lote, e não
    requisição. `Job` → `Step` (chunk 10) → `FlatFileItemReader` → processor que normaliza
@@ -172,8 +179,8 @@ Aplicação Principal → permissions_saas      audit-service → audit_db
 
 | Dia | Data       | Horas | Entrega                                                                                                                                                                                                                                                                                                                                                                                    |
 | --- | ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 4   | Sex 25/09  | 1h    | Esqueleto do`audit-service/`: `pom.xml`, classe `@SpringBootApplication`, `application.yml`, porta 8081; cópia do `audit/domain` e do mapeamento JPA para o projeto novo                                                                                                                                                                                                        |
-| 5   | Sáb 26/09 | 3h    | `audit-service` funcional: `POST /audit-events` (registrar) e `GET /audit-events` (consultar, com filtros), DTOs de contrato próprios (sem expor entidade JPA), Bean Validation, `GlobalExceptionHandler`, Swagger, migration `V1` do serviço                                                                                                                                  |
+| 4 ✅ | Sex 25/09  | 1h    | **Feito em 28/09.** Esqueleto do `audit-service/`: `pom.xml` (Spring Boot 4.1.0, sem Security), classe `@SpringBootApplication`, `application.yml` na porta 8081; cópia do `audit/domain`, do mapeamento JPA e das consultas JPQL do ADR-009 |
+| 5 ✅ | Sáb 26/09 | 3h    | **Feito em 28/09, com ajuste.** `GET /audit-events` (com os filtros da etapa 1) e `POST /audit-events/permission-checks` — o caminho é específico do tipo porque o corpo só serve para validações de permissão —, DTOs de contrato próprios, Bean Validation, `GlobalExceptionHandler`, Swagger, migration `V1`; pasta `audit-service (8081)` na coleção do Postman e seção no `docs/API.md` |
 | 6   | Dom 27/09  | 3h    | Aplicação principal:`AuditClient` (`@FeignClient`) no lugar do `AuditEventRepositoryAdapter`; `AuditLogListener` passa a chamar o cliente; `GET /audit-events` da aplicação principal vira proxy Feign (Decisão 5); **tratamento de indisponibilidade** (falha do Feign não pode derrubar a validação de permissão nem vazar stack trace); URL em `audit.service.url`; remoção do `audit` do módulo principal (controller e adapter JPA) |
 | 7   | Seg 28/09  | 1h    | Testes da comunicação pelo Postman/Swagger (serviço isolado, operação via aplicação principal, serviço fora do ar); reflexão arquitetural da Etapa 2 no `README.md` → **tag `arq-etapa-2`**. Folga desta hora é buffer do fim de semana anterior                                                                                                                    |
 
@@ -182,7 +189,7 @@ Aplicação Principal → permissions_saas      audit-service → audit_db
 | Dia | Data      | Horas | Entrega                                                                                                                                                                                                                                                  |
 | --- | --------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 8   | Ter 29/09 | 1h    | `application-dev`/`application-prod` nos três serviços; variáveis de ambiente (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `AUDIT_SERVICE_URL`); `.env.example` atualizado                                                                  |
-| 9   | Qua 30/09 | 1h    | Banco próprio do`audit-service` (`audit_db`); migration na aplicação principal removendo `audit_events`; conferir que nenhum serviço alcança a tabela do outro                                                                                |
+| 9 ⚠️ | Qua 30/09 | 1h    | **Metade feita em 28/09:** o `audit-service` já nasceu com banco próprio (`audit_db`, container `audit-postgres`, usuário `audit`, porta 5433). **Falta** a migration na aplicação principal removendo `audit_events` — entra junto com a remoção do módulo `audit` do monolito, depois do Feign |
 | 10  | Qui 01/10 | 1h    | `config-server/` com Spring Cloud Config (backend de arquivos versionado em `config-repo/`); aplicação principal e `audit-service` passam a buscar configuração nele                                                                           |
 | 11  | Sex 02/10 | 1h    | `Dockerfile` do `audit-service` e do `config-server`; `docker-compose.yml` subindo tudo em rede própria (sem `localhost` entre containers); reflexão arquitetural da Etapa 3 → **tag `arq-etapa-3`** |
 
@@ -207,8 +214,8 @@ cada dia.
 | Data | Dias do plano | Entrega |
 |---|---|---|
 | Seg 28/09 | 2 | Consultas do `audit`, documentação, tag `arq-etapa-1` |
-| Ter 29 – Qua 30/09 | 4, 5 e 9 | `audit-service`: esqueleto, `POST`/`GET /audit-events`, banco próprio desde o início |
-| Qui 01/10 | 6 e 7 | Feign, indisponibilidade, testes pelo Postman/Swagger, tag `arq-etapa-2` |
+| ~~Ter 29 – Qua 30/09~~ Seg 28/09 ✅ | 4, 5 e 9 (metade) | `audit-service`: esqueleto, `POST`/`GET`, banco próprio — adiantado. De carona, a aplicação principal saiu da raiz para `permission-service/` (ADR-008 revisado) |
+| Ter 29/09 – Qui 01/10 | 6, 7 e 9 (resto) | Feign (gravação e consulta), indisponibilidade, remoção do `audit` do monolito, testes pelo Postman/Swagger, tag `arq-etapa-2` — a folga ganha no `audit-service` vai para cá |
 | Sex 02/10 | 8 e 11 | Profiles, variáveis de ambiente, `Dockerfile` e Compose, tag `arq-etapa-3` |
 | Sáb 03 – Dom 04/10 | 12 e 13 | RabbitMQ e Batch, tag `arq-etapa-4`; Config Server (dia 10) só se sobrar tempo |
 | Seg 05/10 | 14 | Buffer, seção **Uso de IA**, entrega |
