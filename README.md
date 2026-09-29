@@ -19,8 +19,23 @@ começar um projeto do zero. O que cada uma acrescentou está em
 ### Pré-requisitos
 
 - Docker + Docker Compose (v2, comando `docker compose`)
-- Para rodar fora do Docker: JDK 21. O Maven Wrapper (`./mvnw`) já está no repositório
+- Para rodar fora do Docker: JDK 21. O Maven Wrapper (`./mvnw`) já está em cada projeto
   e baixa a versão certa do Maven sozinho — não precisa ter o Maven instalado.
+
+### Estrutura do repositório
+
+```
+permission_saas/
+├── permission-service/  aplicação principal (monolito modular) — porta 8080
+├── audit-service/       trilha de auditoria extraída como serviço — porta 8081
+├── docker-compose.yml   orquestra as aplicações e os bancos
+├── docker/              script de inicialização do Postgres da aplicação principal
+└── docs/                documentação do projeto e de cada disciplina
+```
+
+Cada aplicação é um projeto Maven independente, com seu próprio `pom.xml`, `mvnw` e
+`Dockerfile`: os comandos `./mvnw` abaixo rodam **dentro** da pasta do projeto. A
+decisão está no ADR-008 de [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Variáveis de ambiente
 
@@ -43,10 +58,10 @@ Se for rodar a aplicação fora do Docker (`./mvnw spring-boot:run`), o `.env` *
 
 ```bash
 set -a && source .env && set +a
-./mvnw spring-boot:run
+cd permission-service && ./mvnw spring-boot:run
 ```
 
-### Subir tudo (app + Postgres)
+### Subir tudo (aplicações + bancos)
 
 ```bash
 docker compose up -d --build
@@ -63,7 +78,7 @@ curl http://localhost:8080/ping
 ### Live reload com `docker compose watch`
 
 Em vez de rebuildar a imagem manualmente a cada mudança, `docker compose watch`
-observa `./src`, `./pom.xml` e `./.env` (configurado em `docker-compose.yml`) e
+observa `./permission-service/src`, `./permission-service/pom.xml` e `./.env` (configurado em `docker-compose.yml`) e
 rebuilda o container automaticamente quando algum desses arquivos muda:
 
 ```bash
@@ -73,7 +88,7 @@ docker compose watch           # em outro terminal, fica observando e rebuildand
 
 ### Debug remoto do container
 
-A imagem já sobe com o agente JDWP habilitado (`Dockerfile`) e a porta `5005`
+A imagem já sobe com o agente JDWP habilitado (`permission-service/Dockerfile`) e a porta `5005`
 exposta em `docker-compose.yml` — não precisa mudar nada para debugar. Basta
 configurar a IDE para anexar (attach) um **Remote JVM Debug** em `localhost:5005`
 e colocar os breakpoints normalmente; o processo já sobe com
@@ -83,15 +98,26 @@ e colocar os breakpoints normalmente; o processo já sobe com
 
 ```bash
 docker compose up -d postgres
-./mvnw spring-boot:run
+cd permission-service && ./mvnw spring-boot:run
+```
+
+O `audit-service` tem banco próprio. Rode-o num terminal **sem** o `.env` da raiz
+exportado — as variáveis `SPRING_DATASOURCE_*` de lá apontam para o banco da
+aplicação principal e teriam precedência sobre o `application.yml` do serviço:
+
+```bash
+docker compose up -d audit-postgres
+cd audit-service && ./mvnw spring-boot:run
 ```
 
 ### Build e testes
 
 ```bash
+cd permission-service
 ./mvnw clean package -DskipTests   # build
 ./mvnw test                        # testes
 ./mvnw test -Dtest=ClassName       # uma classe específica
+./mvnw verify                      # inclui os testes de integração (*IT)
 ```
 
 ---
@@ -134,7 +160,7 @@ Monolito modular: um único deploy, organizado por módulo de domínio, cada um 
 | `audit`      | Trilha de auditoria das validações, via Observer                          | ✅     |
 
 Os módulos só conversam por use cases ou eventos — nunca pelo repositório de outro
-módulo. Essa fronteira é verificada pelo Spring Modulith: `./mvnw test` falha se
+módulo. Essa fronteira é verificada pelo Spring Modulith: `./mvnw test` (em `permission-service/`) falha se
 alguém importar um pacote interno de outro módulo.
 
 Detalhes de camadas, regras de comunicação entre módulos e ADRs:

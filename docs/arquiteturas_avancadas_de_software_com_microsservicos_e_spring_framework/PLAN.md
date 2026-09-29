@@ -72,21 +72,22 @@ do que já foi entregue é reescrito.
    Extrair `billing` seria o oposto: `ApiKeyValidationHandler` depende dele **dentro** da
    requisição de validação, e a separação transformaria uma chamada de método em ponto de falha no
    caminho crítico.
-3. **Layout do repositório: aditivo, não multi-módulo Maven.** A aplicação principal continua na
-   raiz, com o `pom.xml` atual intocado. Os projetos novos entram como pastas irmãs com `pom.xml`
-   próprio:
+3. **Layout do repositório: pastas irmãs, não multi-módulo Maven.** Um repositório só, com cada
+   aplicação na sua pasta e `pom.xml` próprio, sem `pom` agregador:
 
    ```
    permission_saas/
-   ├── src/ pom.xml Dockerfile          aplicação principal (como está hoje)
-   ├── audit-service/                   serviço extraído
-   ├── config-server/                   Spring Cloud Config Server
-   └── docker-compose.yml               orquestra todos
+   ├── permission-service/  aplicação principal
+   ├── audit-service/       serviço extraído
+   ├── config-server/       Spring Cloud Config Server
+   └── docker-compose.yml   orquestra todos
    ```
 
-   Converter a raiz em `pom` agregador moveria `src/` inteiro, sujaria o diff da entrega e
-   reescreveria evidência das disciplinas anteriores — exatamente o que o `CLAUDE.md` proíbe. A
-   decisão e a alternativa descartada viram **ADR-008** em `docs/ARCHITECTURE.md`.
+   **Revisada em 28/09/2026.** A primeira versão mantinha a aplicação principal na raiz, para não
+   "sujar o diff" movendo `src/`. O Git registra o movimento como renomeação, sem linha alterada,
+   e as tags antigas seguem intactas; já o serviço aninhado dentro da aplicação principal
+   confundia a leitura do repositório e a IDE. Decisão, revisão e alternativa descartada no
+   **ADR-008** de `docs/ARCHITECTURE.md`.
 4. **Nome das tags — há conflito.** A disciplina pede `etapa-1` … `etapa-4`, mas essas tags **já
    existem** apontando para a disciplina de Spring Boot. Mover qualquer uma delas destrói a
    evidência já avaliada.
@@ -244,7 +245,7 @@ postagem no Moodle na última hora.
 - `shared/domain/Mapper.java` — mesma interface para os mappers do serviço extraído.
 - `permission/domain/event/PermissionValidatedEvent` — já é o contrato do que vai para a fila na
   Etapa 4; a carga da mensagem sai dele.
-- `Dockerfile` da raiz — modelo para os `Dockerfile` dos projetos novos.
+- `permission-service/Dockerfile` — modelo para os `Dockerfile` dos projetos novos.
 - `audit/api/` — o controller atual é o molde do `GET /audit-events` que vira proxy Feign
   (Decisão 5) e do controller equivalente dentro do `audit-service`.
 

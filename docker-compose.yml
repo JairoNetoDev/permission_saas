@@ -32,9 +32,9 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  permission-service:
     build:
-      context: .
+      context: ./permission-service
       dockerfile: Dockerfile
     depends_on:
       postgres:
@@ -58,9 +58,9 @@ services:
     develop:
       watch:
         - action: rebuild
-          path: ./src
+          path: ./permission-service/src
         - action: rebuild
-          path: ./pom.xml
+          path: ./permission-service/pom.xml
         - action: rebuild
           path: ./.env
 
