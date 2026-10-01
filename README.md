@@ -311,6 +311,113 @@ bcrypt, o que fica mais lento a cada cliente.
 
 ---
 
+## Serviço independente: `audit-service`
+
+A extração da etapa 2. O porquê da escolha está em
+[Candidato a serviço independente: `audit`](#candidato-a-serviço-independente-audit).
+
+|                                         |                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nome**                                | `audit-service` — pasta `audit-service/`, porta 8081, banco próprio `audit_db` (porta 5433)                                                                                                                                                                                                                           |
+| **Responsabilidade principal**          | Guardar a trilha de auditoria das validações de permissão e permitir consultá-la por tipo, projeto, período e resultado                                                                                                                                                                                              |
+| **O que saiu da aplicação principal**   | A persistência da trilha: entidades JPA com herança `SINGLE_TABLE`, repositórios, consultas JPQL, o arquivo `logs/audit-events.txt` e a tabela `audit_events`, apagada pela migration `V10`. O módulo `audit` do monolito ficou só como cliente do serviço                                                       |
+| **Motivo**                              | Nenhum módulo depende da auditoria para decidir algo: o `permission` avisa o que aconteceu e não espera resposta. Os dados não têm chave estrangeira para outras tabelas e crescem a cada validação, num ritmo próprio. E auditoria serve a qualquer sistema, não só a este — ver a [reflexão](#etapa-2--separação-do-audit-service) |
+
+**API REST.** Contrato em DTOs próprios nos dois lados (`RegisterPermissionCheckRequest`,
+`AuditEventResponse`); nenhuma entidade JPA atravessa a rede. Swagger em
+`http://localhost:8081/swagger-ui/index.html`; detalhes em [`docs/API.md`](docs/API.md).
+
+| Método | Caminho                           | O que faz                                                                     | Respostas      |
+| ------ | --------------------------------- | ----------------------------------------------------------------------------- | -------------- |
+| `POST` | `/audit-events/permission-checks` | Registra uma validação de permissão                                           | `201`, `400` |
+| `GET`  | `/audit-events`                   | Consulta a trilha, com filtros opcionais `type`, `projectId`, `onlyDenied`, `from` e `to` | `200`, `400` |
+
+**Comunicação.** A aplicação principal chama o serviço pelo cliente OpenFeign
+`AuditClient`, sempre atrás da porta `AuditTrail` — nenhum controller conhece o Feign.
+O endereço vem de `audit.service.url` no `application.yml`
+(`${AUDIT_SERVICE_URL:http://localhost:8081}`), nunca do código Java.
+
+```
+Cliente HTTP
+↓
+permission-service (8080)
+├── PermissionController → ValidatePermissionUseCase → publica PermissionValidatedEvent
+│                                                          ↓
+├── AuditLogListener (Observer) ───────────→ porta AuditTrail → AuditClient (@FeignClient)
+└── AuditEventController → SearchAuditEventsUseCase ↗                  ↓ HTTP
+                                                     audit-service (8081)
+                                                     ├── AuditEventController
+                                                     ├── RegisterPermissionCheckUseCase / SearchAuditEventsUseCase
+                                                     └── AuditEventRepository → PostgreSQL audit_db
+```
+
+**Falha de comunicação.** O cliente desiste em 1s para conectar e 2s para ler. Cada
+operação trata a falha de um jeito:
+
+- **Gravação** — a validação de permissão responde normalmente; o `AuditLogListener`
+  captura a falha e o evento se perde, com `WARN ... Audit event lost: ...` no log.
+- **Consulta** — `GET /audit-events` responde `503` com
+  `{"status":503,"error":"Service Unavailable","message":"Audit service is unavailable",...}`.
+  O detalhe do Feign só vai para o log.
+
+**Como testar** (coleção em [`docs/postman/`](docs/postman/)):
+
+| Demonstração                         | Pasta do Postman                                     |
+| ------------------------------------ | ---------------------------------------------------- |
+| API do serviço isolada               | `audit-service (8081)`                               |
+| Operação pela aplicação principal    | `Fluxo completo` (requisições 9 a 14) e `Audit`      |
+| Serviço indisponível                 | `audit-service fora do ar` — o roteiro está na descrição da pasta |
+
+---
+
+## Reflexões arquiteturais
+
+### Etapa 2 — separação do `audit-service`
+
+**Qual funcionalidade foi separada da aplicação principal?** A trilha de auditoria:
+registrar cada validação de permissão (projeto, rota, cargo, resultado e motivo) e
+consultar esse histórico depois.
+
+**Por que ela foi escolhida?** Era o módulo mais desacoplado do monolito: ninguém
+depende dele, ele só recebe um evento e não devolve nada. Separar primeiro a parte mais
+solta segue o *Strangler Fig*: tirar uma capacidade de cada vez do monolito, sem
+reescrevê-lo inteiro. O `billing`, pelo contrário, está dentro da requisição de validação
+e, se fosse separado, viraria um ponto de falha no caminho crítico.
+
+**O que ficou mais complexo depois da separação?**
+
+- A aplicação principal precisou ser reestruturada para atender o novo serviço. O código
+  saiu da raiz para `permission-service/`. O módulo `audit` perdeu a persistência e virou
+  cliente, com um `@FeignClient`, um adapter e DTOs que espelham o contrato do serviço.
+  Esse contrato agora existe nos dois lados e precisa mudar junto.
+- Passou a haver outro sistema para cuidar: dois projetos, dois bancos e duas aplicações
+  para subir, depurar e manter.
+- A aplicação principal precisa decidir o que fazer com o retorno ou a falha do serviço.
+  Uma chamada de método virou chamada de rede, que pode demorar, falhar ou nem responder.
+  Cada operação ganhou uma decisão própria: a gravação engole a falha, a consulta devolve
+  `503`.
+- Foi preciso configurar a aplicação principal para a indisponibilidade: URL externa,
+  timeouts e tratamento de erro que não vaza detalhe interno.
+
+**O que aconteceria com a funcionalidade principal caso o novo serviço ficasse
+indisponível?** A validação de permissão, que é o produto, continua funcionando. Ela
+responde normalmente, no máximo uns 3 segundos mais lenta por causa dos timeouts, mas o
+evento daquela validação se perde. A consulta da trilha fica fora do ar e responde `503`.
+A perda de eventos é a limitação aceita nesta etapa; a fila do RabbitMQ, na etapa 4,
+existe para resolvê-la.
+
+**A funcionalidade realmente precisa permanecer como um serviço independente?** Sim. Olhando
+só para o Permission SaaS, o módulo `audit` dentro do monolito dava conta: funcionou assim
+na disciplina anterior, e a separação trouxe os custos listados acima sem ganho funcional
+para este sistema sozinho. O que justifica o serviço é ele servir de base para outros
+projetos. Auditoria é útil para qualquer sistema: mostra o que acontece de certo e de errado
+nas aplicações e apoia a conformidade com a LGPD, que pede o registro das operações de
+tratamento de dados pessoais. Com esse horizonte, desacoplar a auditoria do projeto
+principal foi uma escolha válida. A direção está registrada em
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → "Direção futura".
+
+---
+
 ## Padrões de projeto
 
 | Padrão                 | Onde                                                                                   | Status |
@@ -332,11 +439,12 @@ Onde cada padrão vive, por que foi escolhido e como estender:
 **Implementado:** cadastro de cliente, assinatura de plano com pagamento simulado e
 geração de ApiKey, middleware de validação de permissão aplicando a regra real
 (o cargo precisa de uma concessão ativa sobre a rota), CRUD de projeto/cargo/rota com
-histórico de concessão e revogação, e trilha de auditoria em banco e arquivo texto.
+histórico de concessão e revogação, e trilha de auditoria em banco e arquivo texto —
+desde a etapa 2 no [`audit-service`](#serviço-independente-audit-service), chamado por
+OpenFeign.
 
-**Em desenvolvimento:** extração do `audit` para um serviço Spring Boot independente,
-comunicação por OpenFeign, configuração centralizada, mensageria e processamento em
-lote — o escopo da disciplina de microsserviços, descrito em
+**Em desenvolvimento:** configuração centralizada, mensageria e processamento em
+lote — o restante do escopo da disciplina de microsserviços, descrito em
 [Evolução](#evolução).
 
 **Trabalho futuro:** gateway de pagamento real, autenticação/JWT com Spring Security,
