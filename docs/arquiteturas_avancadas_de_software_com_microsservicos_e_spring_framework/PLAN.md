@@ -181,7 +181,7 @@ Aplicação Principal → permissions_saas      audit-service → audit_db
 | --- | ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 4 ✅ | Sex 25/09  | 1h    | **Feito em 28/09.** Esqueleto do `audit-service/`: `pom.xml` (Spring Boot 4.1.0, sem Security), classe `@SpringBootApplication`, `application.yml` na porta 8081; cópia do `audit/domain`, do mapeamento JPA e das consultas JPQL do ADR-009 |
 | 5 ✅ | Sáb 26/09 | 3h    | **Feito em 28/09, com ajuste.** `GET /audit-events` (com os filtros da etapa 1) e `POST /audit-events/permission-checks` — o caminho é específico do tipo porque o corpo só serve para validações de permissão —, DTOs de contrato próprios, Bean Validation, `GlobalExceptionHandler`, Swagger, migration `V1`; pasta `audit-service (8081)` na coleção do Postman e seção no `docs/API.md` |
-| 6 ⚠️ | Dom 27/09  | 3h    | **Começado em 28/09:** BOM Spring Cloud `2025.1.3` + `spring-cloud-starter-openfeign`, `@EnableFeignClients` e `audit.service.url` feitos. **Em 30/09:** `AuditClient` e a gravação pelo Feign com timeout e `try/catch`. O restante está em "Onde parou" abaixo. Aplicação principal:`AuditClient` (`@FeignClient`) no lugar do `AuditEventRepositoryAdapter`; `AuditLogListener` passa a chamar o cliente; `GET /audit-events` da aplicação principal vira proxy Feign (Decisão 5); **tratamento de indisponibilidade** (falha do Feign não pode derrubar a validação de permissão nem vazar stack trace); URL em `audit.service.url`; remoção do `audit` do módulo principal (controller e adapter JPA) |
+| 6 ✅ | Dom 27/09  | 3h    | **Feito em 28–30/09** (passos 6 a 10 de "Onde parou" abaixo): BOM Spring Cloud `2025.1.3` + `spring-cloud-starter-openfeign`, `AuditClient`, gravação e consulta pelo Feign com timeout, `try/catch` e `503`, persistência local do `audit` removida (ADR-010). Aplicação principal:`AuditClient` (`@FeignClient`) no lugar do `AuditEventRepositoryAdapter`; `AuditLogListener` passa a chamar o cliente; `GET /audit-events` da aplicação principal vira proxy Feign (Decisão 5); **tratamento de indisponibilidade** (falha do Feign não pode derrubar a validação de permissão nem vazar stack trace); URL em `audit.service.url`; remoção do `audit` do módulo principal (controller e adapter JPA) |
 | 7   | Seg 28/09  | 1h    | Testes da comunicação pelo Postman/Swagger (serviço isolado, operação via aplicação principal, serviço fora do ar); reflexão arquitetural da Etapa 2 no `README.md` → **tag `arq-etapa-2`**. Folga desta hora é buffer do fim de semana anterior                                                                                                                    |
 
 ### Etapa 3 — Configuração e Execução (29/09–02/10)
@@ -215,8 +215,8 @@ cada dia.
 |---|---|---|
 | Seg 28/09 | 2 | Consultas do `audit`, documentação, tag `arq-etapa-1` |
 | ~~Ter 29 – Qua 30/09~~ Seg 28/09 ✅ | 4, 5 e 9 (metade) | `audit-service`: esqueleto, `POST`/`GET`, banco próprio — adiantado. De carona, a aplicação principal saiu da raiz para `permission-service/` (ADR-008 revisado) |
-| Ter 29/09 – Qui 01/10 | 6, 7 e 9 (resto) | Feign (gravação e consulta), indisponibilidade, remoção do `audit` do monolito, testes pelo Postman/Swagger, tag `arq-etapa-2` — a folga ganha no `audit-service` vai para cá |
-| Sex 02/10 | 8 e 11 | Profiles, variáveis de ambiente, `Dockerfile` e Compose, tag `arq-etapa-3` |
+| Ter 29/09 – Qui 01/10 | 6, 7 e 9 (resto) | Feign (gravação e consulta), indisponibilidade, remoção do `audit` do monolito, testes pelo Postman/Swagger, tag `arq-etapa-2` — a folga ganha no `audit-service` vai para cá. **Situação em 01/10:** a terça não rendeu código e consumiu a folga; os passos 6 a 10 fecharam na quarta (30/09); falta o 11, na quinta. Em dia com este replanejamento, sem margem |
+| Sex 02/10 | 8 e 11 | Profiles, variáveis de ambiente, `Dockerfile` e Compose, tag `arq-etapa-3`. É o dia mais apertado: proposta de divisão — Claude faz a parte mecânica (`Dockerfile` do `audit-service`, Compose, profiles), Jairo as decisões e a reflexão |
 | Sáb 03 – Dom 04/10 | 12 e 13 | RabbitMQ e Batch, tag `arq-etapa-4`; Config Server (dia 10) só se sobrar tempo |
 | Seg 05/10 | 14 | Buffer, seção **Uso de IA**, entrega |
 
@@ -226,7 +226,7 @@ crítico — a rubrica não pontua testes JUnit, e as demonstrações que ela pe
 serviço fora do ar, fila com consumidor parado) são manuais. Ficam como trabalho futuro, a começar
 pelo teste de integração das consultas do ADR-009.
 
-### Onde parou (atualizado em 30/09)
+### Onde parou (atualizado em 01/10)
 
 Retomar pelo **passo 11**. A sequência até a tag `arq-etapa-2`, na ordem:
 
@@ -239,8 +239,22 @@ Retomar pelo **passo 11**. A sequência até a tag `arq-etapa-2`, na ordem:
 | 10 ✅ | Claude | Persistência do `audit` apagada do monolito (entidades, repositórios, adapter, portas antigas, `AuditDemoRunner`, file writer, `ProjectLifecycleEvent`) e migration `V10` apagando `audit_events` (ADR-010) — fecha o dia 9. Testado em 30/09: `clean verify` (22 + 9 testes) e as 10 migrations num PostgreSQL vazio. **Aguardando revisão do Jairo antes do commit** |
 | **11** | juntos | Testes da comunicação no Postman (serviço isolado, pela aplicação principal, serviço fora do ar), reflexão da etapa 2 no `README.md` (Strangler Fig) e tag `arq-etapa-2` |
 
-Pendências menores fora da sequência: o `docker-compose.yml` ainda não repassa `AUDIT_SERVICE_URL`
-ao container da aplicação principal (entra com o `audit-service` no Compose, dia 11).
+O passo 11 inclui, no Postman: um request do `GET /audit-events` da aplicação principal com o
+`audit-service` desligado (`503`) e o roteiro da demonstração "serviço fora do ar" (a validação segue
+respondendo `200` e o log mostra `Audit event lost: ...`). Os cenários já foram exercitados por curl em
+30/09; o passo 11 os deixa reproduzíveis para o professor.
+
+Pendências menores fora da sequência:
+
+- O `docker-compose.yml` ainda não repassa `AUDIT_SERVICE_URL` ao container da aplicação principal
+  (entra com o `audit-service` no Compose, dia 11).
+- O `git stash` "IT do audit (plano futuro)" ficou obsoleto: testa o `AuditEventRepositoryAdapter` do
+  monolito, apagado no passo 10, e está no layout antigo (`src/` na raiz). O teste de integração das
+  consultas faz sentido no `audit-service`, como trabalho futuro.
+- **Proposta para a etapa 4 (dia 12), a confirmar com o Jairo:** desenhar a mensagem do RabbitMQ como
+  envelope genérico (`source`, `type`, `occurredAt`, `payload`), alinhado à direção futura do
+  `audit-service` registrada em `docs/ARCHITECTURE.md` → "Direção futura". Mesmo custo de um formato
+  específico.
 
 ### Ordem de corte, se atrasar
 

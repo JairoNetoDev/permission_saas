@@ -111,6 +111,29 @@ docker compose up -d audit-postgres
 cd audit-service && ./mvnw spring-boot:run
 ```
 
+Para testar a comunicação entre os dois, suba os dois serviços ao mesmo tempo, cada um
+no seu terminal (ou cada um numa configuração de launch da IDE, a do `audit-service`
+sem o `.env`). Ao depurar, um breakpoint parado no `audit-service` estoura o timeout de
+2s do cliente Feign; para depurar com calma, suba a aplicação principal com
+`--spring.cloud.openfeign.client.config.audit-service.read-timeout=600000`.
+
+**Porta 5432 ocupada** por um PostgreSQL instalado na máquina: suba o banco da
+aplicação principal num container avulso em outra porta, com o mesmo volume do Compose,
+e aponte a aplicação para ela:
+
+```bash
+docker run -d --rm --name permission-pg-5434 -e POSTGRES_DB=permissions_saas \
+  -e POSTGRES_USER=saas -e POSTGRES_PASSWORD=saas123 \
+  -v permission_saas_permission_saas_pgdata:/var/lib/postgresql/data -p 5434:5432 postgres:16
+set -a && source .env && set +a
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5434/permissions_saas \
+  SPRING_DATASOURCE_USERNAME=saas SPRING_DATASOURCE_PASSWORD=saas123
+cd permission-service && ./mvnw spring-boot:run
+```
+
+`--rm` remove o container quando ele para (`docker stop permission-pg-5434`); os dados
+ficam no volume.
+
 ### Build e testes
 
 ```bash
@@ -189,8 +212,11 @@ cadeia de responsabilidade: cada handler verifica uma preocupação e delega adi
 Não tem tabela própria — pergunta aos outros módulos.
 
 **`audit` — o que aconteceu.** Registra cada validação de permissão em uma trilha
-append-only, no banco e em arquivo texto. Nasce de um evento publicado pelo
-`permission` e não devolve nada a ninguém.
+append-only. Nasce de um evento publicado pelo `permission` e não devolve nada a
+ninguém. Desde 30/09/2026 não guarda nada localmente: envia cada evento e repassa cada
+consulta ao `audit-service` (porta 8081, banco próprio) via OpenFeign — se o serviço
+cair, a validação de permissão segue funcionando e o evento se perde, com um aviso no
+log, e a consulta responde `503`.
 
 **`shared` — o que é de todos.** Configuração de segurança e Swagger, `Mapper<I,O>`,
 `DomainException` e o `GlobalExceptionHandler` que centraliza o tratamento de erro.
@@ -229,6 +255,10 @@ o `AuditLogListener` reage a ele. A seta aponta para dentro do `audit` e nada vo
 
 ### Candidato a serviço independente: `audit`
 
+> Análise da etapa 1. A extração foi feita na etapa 2: o `audit-service/` grava e
+> consulta a trilha no próprio banco, e o módulo `audit` do monolito virou só um
+> cliente dele (ADR-010 em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
+
 **Responsabilidade.** Registrar a trilha de auditoria das validações de permissão —
 projeto, rota, cargo, data, resultado e motivo — e permitir consultá-la depois.
 
@@ -260,7 +290,8 @@ Além do CRUD do `JpaRepository`, as consultas que o domínio pede:
   (`findByDeletedAtIsNullAndNameContainingIgnoreCaseOrderByNameAsc`), por cliente
   (`findByClientIdAndDeletedAtIsNullOrderByCreatedAtAsc`) e a busca por id que
   ignora os excluídos (`findByIdAndDeletedAtIsNull`).
-- **`audit` — JPQL com filtros opcionais.** `search` filtra a trilha por tipo,
+- **`audit` — JPQL com filtros opcionais** (desde 30/09/2026 no `audit-service`, para
+  onde a trilha foi extraída). `search` filtra a trilha por tipo,
   projeto e período; `searchDenied` devolve só as validações negadas, por projeto e
   período, apoiada no índice parcial `idx_audit_events_denied`. Na disciplina anterior
   esses filtros rodavam em memória; como a trilha só cresce, desceram para o banco —
@@ -272,6 +303,11 @@ Em `permission`, o `TokenValidationHandler` ainda é um stub documentado que sem
 concede: depende de um 2º fator de autenticação, fora do escopo até aqui. Os outros
 dois handlers aplicam regra real — `ApiKeyValidationHandler` valida a ApiKey contra o
 `billing` e `RoleRouteValidationHandler` verifica a concessão de rota no `project`.
+
+A validação da ApiKey tem duas lacunas registradas como trabalho futuro em
+[`docs/DOMAIN.md`](docs/DOMAIN.md) → "Limitações conhecidas": a chave não é conferida
+contra o dono do projeto, e a busca compara a chave com todas as chaves ativas por
+bcrypt, o que fica mais lento a cada cliente.
 
 ---
 
