@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Permission SaaS",
-    "description": "Colecao de requisicoes da API do Permission SaaS.\n\nOrdem sugerida: execute a pasta 'Fluxo completo' de cima para baixo — cada requisicao guarda em variaveis de colecao o que a proxima precisa (clientId, planId, apiKey, projectId).\n\nVariavel baseUrl: http://localhost:8080\n\nVariavel auditBaseUrl: http://localhost:8081 — usada pela pasta 'audit-service (8081)', que chama o servico extraido direto.",
+    "description": "Colecao de requisicoes da API do Permission SaaS.\n\nOrdem sugerida: execute a pasta 'Fluxo completo' de cima para baixo — cada requisicao guarda em variaveis de colecao o que a proxima precisa (clientId, planId, apiKey, projectId).\n\nVariavel baseUrl: http://localhost:8080\n\nVariavel auditBaseUrl: http://localhost:8081 — usada pela pasta 'audit-service (8081)', que chama o servico extraido direto.\n\nPasta 'audit-service fora do ar': roteiro da demonstracao de indisponibilidade — pare o audit-service antes das requisicoes 1 e 2 e religue antes da 3.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -43,6 +43,10 @@
     },
     {
       "key": "auditEventId",
+      "value": ""
+    },
+    {
+      "key": "outageStartedAt",
       "value": ""
     }
   ],
@@ -1991,6 +1995,213 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "audit-service fora do ar",
+      "description": "Demonstra o que a aplicacao principal faz quando o audit-service nao responde.\n\nPre-requisito: rodar antes a pasta 'Fluxo completo' (preenche apiKey e projectId).\n\nRoteiro:\n1. Pare o audit-service (Ctrl+C no terminal dele, ou pare so ele no compound de debug do VS Code). A aplicacao principal continua no ar.\n2. Rode as requisicoes 1 e 2.\n3. Religue o audit-service e rode as requisicoes 3, 4 e 5.\n\nAs outras duas demonstracoes do enunciado ficam em outras pastas: o servico isolado em 'audit-service (8081)' e a operacao pela aplicacao principal em 'Fluxo completo' (9 a 14) e 'Audit'.",
+      "item": [
+        {
+          "name": "1. 200 — validacao segue respondendo com o servico fora",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('outageStartedAt', new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('permitido', () => pm.expect(pm.response.json().granted).to.eql(true));",
+                  "pm.test('responde dentro dos timeouts do Feign', () => pm.expect(pm.response.responseTime).to.be.below(3500));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"{{apiKey}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"role\": \"ADMIN\",\n  \"httpMethod\": \"GET\",\n  \"route\": \"/users\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/validate-permission",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validate-permission"
+              ]
+            },
+            "description": "Com o audit-service parado. A validacao de permissao nao depende da auditoria: a resposta continua 200 e o log da aplicacao principal mostra WARN ... Audit event lost: ... — o evento desta requisicao se perde. O tempo de resposta fica limitado pelos timeouts do cliente Feign (1s para conectar, 2s para ler)."
+          }
+        },
+        {
+          "name": "2. 503 — consulta da trilha com o servico fora",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('503 Service Unavailable', () => pm.response.to.have.status(503));",
+                  "pm.test('mensagem generica', () => pm.expect(pm.response.json().message).to.eql('Audit service is unavailable'));",
+                  "pm.test('nao vaza detalhe interno', () => {",
+                  "    pm.expect(Object.keys(pm.response.json())).to.have.members(['status', 'error', 'message', 'timestamp']);",
+                  "    pm.expect(pm.response.text()).to.not.match(/feign|exception|refused|localhost/i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ]
+            },
+            "description": "Com o audit-service parado. A consulta nao tem como ser respondida sem o servico, entao a aplicacao principal devolve 503 com uma mensagem generica — sem stack trace nem detalhe do Feign."
+          }
+        },
+        {
+          "name": "3. 200 — servico religado, o evento da requisicao 1 se perdeu",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('nenhum evento desde a queda', () => pm.expect(pm.response.json()).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?projectId={{projectId}}&from={{outageStartedAt}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ],
+              "query": [
+                {
+                  "key": "projectId",
+                  "value": "{{projectId}}"
+                },
+                {
+                  "key": "from",
+                  "value": "{{outageStartedAt}}"
+                }
+              ]
+            },
+            "description": "Com o audit-service de volta. A consulta volta a funcionar sem reiniciar a aplicacao principal, mas a trilha nao tem nada desde a requisicao 1: sem fila, o que nao foi entregue se perde. A Etapa 4 resolve com RabbitMQ."
+          }
+        },
+        {
+          "name": "4. 200 — validacao com o servico de volta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('permitido', () => pm.expect(pm.response.json().granted).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"{{apiKey}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"role\": \"ADMIN\",\n  \"httpMethod\": \"GET\",\n  \"route\": \"/users\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/validate-permission",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "validate-permission"
+              ]
+            },
+            "description": "Com o audit-service de volta. Mesma validacao da requisicao 1; desta vez o evento chega ao servico."
+          }
+        },
+        {
+          "name": "5. 200 — a trilha registra a nova validacao",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('so o evento da requisicao 4', () => {",
+                  "    const events = pm.response.json();",
+                  "    pm.expect(events).to.have.lengthOf(1);",
+                  "    pm.expect(events[0].type).to.eql('PERMISSION_CHECK');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?projectId={{projectId}}&from={{outageStartedAt}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-events"
+              ],
+              "query": [
+                {
+                  "key": "projectId",
+                  "value": "{{projectId}}"
+                },
+                {
+                  "key": "from",
+                  "value": "{{outageStartedAt}}"
+                }
+              ]
+            },
+            "description": "Desde a requisicao 1, a trilha tem um unico evento: o da requisicao 4."
+          }
         }
       ]
     }
