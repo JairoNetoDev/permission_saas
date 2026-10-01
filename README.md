@@ -5,12 +5,12 @@ plano (pagamento simulado) e recebe uma **ApiKey**. Sistemas externos usam essa
 ApiKey para validar, em um único endpoint, se uma requisição pode acessar uma rota
 com determinado cargo.
 
-**Monolito modular** em Java 21 / Spring Boot 3, construído como projeto de longo
+**Monolito modular** em Java 21 / Spring Boot 4.1.0, construído como projeto de longo
 prazo ao longo da Pós-Graduação: cada disciplina evolui este mesmo código em vez de
 começar um projeto do zero. O que cada uma acrescentou está em
 [Evolução](#evolução).
 
-**Stack:** Java 21 · Spring Boot 3 · Spring Data JPA · PostgreSQL 16 · Flyway · Spring Modulith · Docker Compose · Maven
+**Stack:** Java 21 · Spring Boot 4.1.0 · Spring Data JPA · PostgreSQL 16 · Flyway · Spring Modulith · Docker Compose · Maven
 
 ---
 
