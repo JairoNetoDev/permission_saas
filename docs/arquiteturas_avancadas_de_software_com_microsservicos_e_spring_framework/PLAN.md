@@ -228,15 +228,15 @@ pelo teste de integração das consultas do ADR-009.
 
 ### Onde parou (atualizado em 30/09)
 
-Retomar pelo **passo 9**. A sequência até a tag `arq-etapa-2`, na ordem:
+Retomar pelo **passo 10**. A sequência até a tag `arq-etapa-2`, na ordem:
 
 | Passo | Quem | Entrega |
 |---|---|---|
 | 6 ✅ | Jairo + Claude | BOM Spring Cloud `2025.1.3` (a última GA para Spring Boot 4.0–4.1, conferida no Initializr e no Maven Central), `spring-cloud-starter-openfeign`, `@EnableFeignClients`, `audit.service.url: ${AUDIT_SERVICE_URL:http://localhost:8081}`. Commit `611aa53` |
 | 7 ✅ | Jairo + Claude | `AuditClient` (`@FeignClient(name = "audit-service", url = "${audit.service.url}")`) em `audit/infrastructure/client/`, com `registerPermissionCheck` (POST) e `searchAuditEvents` (GET); DTOs de contrato espelhados em `client/dto/` (`RegisterPermissionCheckRequest`, `AuditEventResponse`, sem Bean Validation). Nomes explícitos em cada `@RequestParam`, `required = false` (nulo omite o filtro) e `from`/`to` como `Instant`, para não mandar `+` na URL |
 | 8 ✅ | Jairo + Claude | Gravação: o `AuditLogListener` traduz o evento e chama a porta `AuditTrail` (adapter `AuditTrailClientAdapter` sobre o `AuditClient`), com timeout de 1s/2s no cliente `audit-service` e `try/catch` — com o serviço fora do ar a validação responde normalmente e o evento se perde (limitação que a fila resolve na etapa 4). Testado em 30/09: serviço ligado (evento no `audit_db`), desligado (200 em 0,4s + `WARN`) e travado (200 em 2,5s) |
-| **9** | Jairo | Consulta: o `GET /audit-events` da aplicação principal vira repasse ao serviço; serviço fora do ar responde `503` com mensagem amigável |
-| 10 | Claude | Tirar do monolito a persistência do `audit` (entidades, repositórios, adapter, `AuditDemoRunner`, file writer) e migration apagando `audit_events` do banco principal — fecha o dia 9 |
+| 9 ✅ | Jairo + Claude | Consulta: o `GET /audit-events` da aplicação principal vira repasse ao serviço pela porta `AuditTrail` (modelo de leitura `AuditTrailEntry`); período invertido e filtro inválido seguem `400` locais; serviço fora do ar responde `503` (`ServiceUnavailableException` no `shared`). Testado em 30/09: 8080 devolve o mesmo que a 8081, filtros `projectId`/`onlyDenied`/`type` minúsculo/`from` com fuso `+02:00`, os dois `400` e o `503` |
+| **10** | Claude | Tirar do monolito a persistência do `audit` (entidades, repositórios, adapter, `AuditDemoRunner`, file writer) e migration apagando `audit_events` do banco principal — fecha o dia 9 |
 | 11 | juntos | Testes da comunicação no Postman (serviço isolado, pela aplicação principal, serviço fora do ar), reflexão da etapa 2 no `README.md` (Strangler Fig) e tag `arq-etapa-2` |
 
 Pendências menores fora da sequência: o `docker-compose.yml` ainda não repassa `AUDIT_SERVICE_URL`
