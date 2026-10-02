@@ -48,7 +48,8 @@ cp .env.example .env
 | `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | ✅             | Conexão com o Postgres. Têm default em`application.yml` (`localhost:5432`, `saas`/`saas123`), então nem precisam estar no `.env` para rodar `./mvnw spring-boot:run` com `docker compose up -d postgres`.                                                                                                                                                                                                                                                                                                                                                |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`           | ❌             | `application.yml` referencia `${GOOGLE_CLIENT_ID}` para registrar o client OAuth2 do Google, mas `SecurityConfig` desabilita `oauth2Login` explicitamente (`.oauth2Login(oauth2 -> oauth2.disable())`) e libera todas as rotas (`anyRequest().permitAll()`). Login/JWT ainda não foram implementados (ver [Escopo](#escopo)). A variável só precisa existir com **qualquer valor não vazio** — sem isso o Spring falha ao resolver o placeholder e a aplicação nem sobe. Não há necessidade de criar credenciais reais no Google Cloud Console. |
 | `JWT_SECRET`                                            | ❌             | Mesmo motivo acima — referenciada em`application.yml` (`app.jwt.secret`), mas nenhum código gera ou valida JWT ainda.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `AUDIT_SERVICE_URL`                                     | ✅             | Endereço do `audit-service`, usado pelo cliente OpenFeign da aplicação principal (`audit.service.url` no `application.yml`). Default `http://localhost:8081`, o serviço rodando na máquina. Dentro do Docker Compose passa a ser `http://audit-service:8081`, o nome do serviço na rede interna — o `.env.example` já traz esse valor, que entra no `docker-compose.yml` quando o `audit-service` for containerizado (etapa 3). |
+| `AUDIT_SERVICE_URL`                                     | ✅             | Endereço do `audit-service`, usado pelo cliente OpenFeign da aplicação principal (`audit.service.url` no `application.yml`). Default `http://localhost:8081`, o serviço rodando na máquina. No Docker Compose, o próprio `docker-compose.yml` define `http://audit-service:8081`: o nome do serviço na rede interna, porque dentro de um container `localhost` é o próprio container. |
+| `POSTGRES_HOST_PORT`                                    | ✅             | Porta da **sua máquina** em que o Compose publica o banco da aplicação principal. Default `5432`; use outra (ex.: `5434`) se um PostgreSQL instalado na máquina já ocupa a 5432. Só muda o acesso de fora: entre containers o banco continua em `postgres:5432`. |
 
 `docker compose up` lê o `.env` automaticamente e já sobrescreve as credenciais do
 Postgres com os valores fixos do `docker-compose.yml` — o `.env` importa mesmo é
@@ -68,19 +69,32 @@ cd permission-service && ./mvnw spring-boot:run
 docker compose up -d --build
 ```
 
-App em `http://localhost:8080`, Postgres em `localhost:5432`. As migrations do
-Flyway rodam automaticamente na subida.
+Um comando sobe os quatro containers, na rede que o Compose cria para o projeto:
+
+| Container            | Imagem                               | Porta na máquina | Fala com                        |
+| -------------------- | ------------------------------------ | ---------------- | ------------------------------- |
+| `permission-service` | `permission-service/Dockerfile`      | 8080             | `postgres:5432`, `audit-service:8081` |
+| `audit-service`      | `audit-service/Dockerfile`           | 8081             | `audit-postgres:5432`           |
+| `postgres`           | `postgres:16`                        | 5432 (`POSTGRES_HOST_PORT`) | —                    |
+| `audit-postgres`     | `postgres:16`                        | 5433             | —                               |
+
+Entre containers o endereço é o **nome do serviço** e a porta de dentro, nunca
+`localhost`. As migrations do Flyway de cada aplicação rodam na subida, cada uma no
+seu banco. Os dados ficam em volumes (`permission_saas_pgdata`, `audit_pgdata`), e o
+arquivo `logs/audit-events.txt` do `audit-service` no volume `audit_logs`: sobrevivem
+a `docker compose down` (só `down -v` apaga).
 
 ```bash
-curl http://localhost:8080/ping
-# pong
+curl http://localhost:8080/ping                  # pong
+curl http://localhost:8081/actuator/health       # {"status":"UP",...}
+docker compose ps                                # os quatro como "healthy"
 ```
 
 ### Live reload com `docker compose watch`
 
 Em vez de rebuildar a imagem manualmente a cada mudança, `docker compose watch`
-observa `./permission-service/src`, `./permission-service/pom.xml` e `./.env` (configurado em `docker-compose.yml`) e
-rebuilda o container automaticamente quando algum desses arquivos muda:
+observa o `src/` e o `pom.xml` de cada aplicação, e o `./.env` no caso da principal
+(configurado em `docker-compose.yml`), e rebuilda só o container afetado:
 
 ```bash
 docker compose up -d --build   # sobe a stack uma vez
@@ -89,11 +103,12 @@ docker compose watch           # em outro terminal, fica observando e rebuildand
 
 ### Debug remoto do container
 
-A imagem já sobe com o agente JDWP habilitado (`permission-service/Dockerfile`) e a porta `5005`
-exposta em `docker-compose.yml` — não precisa mudar nada para debugar. Basta
-configurar a IDE para anexar (attach) um **Remote JVM Debug** em `localhost:5005`
-e colocar os breakpoints normalmente; o processo já sobe com
-`suspend=n`, ou seja, a aplicação não espera o debugger conectar para iniciar.
+O agente de debug (JDWP) **não** está dentro das imagens: o `Dockerfile` traz só o
+necessário para rodar a aplicação. Quem liga o debug é o `docker-compose.yml`, pela
+variável `JAVA_TOOL_OPTIONS`, que a JVM lê na partida. A aplicação principal escuta na
+porta `5005` e o `audit-service` na `5006`. Na IDE, anexe (attach) um **Remote JVM
+Debug** em `localhost:5005` ou `localhost:5006`. O processo sobe com `suspend=n`,
+ou seja, não espera o debugger conectar para iniciar.
 
 ### Rodar só o banco (desenvolvimento local)
 
@@ -117,9 +132,16 @@ sem o `.env`). Ao depurar, um breakpoint parado no `audit-service` estoura o tim
 2s do cliente Feign; para depurar com calma, suba a aplicação principal com
 `--spring.cloud.openfeign.client.config.audit-service.read-timeout=600000`.
 
-**Porta 5432 ocupada** por um PostgreSQL instalado na máquina: suba o banco da
-aplicação principal num container avulso em outra porta, com o mesmo volume do Compose,
-e aponte a aplicação para ela:
+**Porta 5432 ocupada** por um PostgreSQL instalado na máquina. Com o Compose, basta
+publicar o banco em outra porta. Para não repetir a variável a cada comando, ponha
+`POSTGRES_HOST_PORT=5434` no `.env`:
+
+```bash
+POSTGRES_HOST_PORT=5434 docker compose up -d --build
+```
+
+Rodando a aplicação fora do Docker, suba o banco num container avulso em outra porta,
+com o mesmo volume do Compose, e aponte a aplicação para ela:
 
 ```bash
 docker run -d --rm --name permission-pg-5434 -e POSTGRES_DB=permissions_saas \

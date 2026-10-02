@@ -226,10 +226,19 @@ crítico — a rubrica não pontua testes JUnit, e as demonstrações que ela pe
 serviço fora do ar, fila com consumidor parado) são manuais. Ficam como trabalho futuro, a começar
 pelo teste de integração das consultas do ADR-009.
 
-### Onde parou (atualizado em 01/10)
+### Onde parou (atualizado em 02/10)
 
-**Etapa 2 fechada em 01/10 com a tag `arq-etapa-2`.** Retomar pela Etapa 3 — sexta, 02/10, dias 8 e 11
-do replanejamento. A sequência que levou à tag, para registro:
+**Etapa 3 em andamento.** A parte de Docker fechou em 02/10; retomar pelo **passo 13**. A sequência até
+a tag `arq-etapa-3`:
+
+| Passo | Quem | Entrega |
+|---|---|---|
+| 12 ✅ | Claude (rascunho do `Dockerfile` do `audit-service` pelo Jairo) | `audit-service/Dockerfile` (multi-stage, como o da aplicação principal) e `.dockerignore` nos dois projetos. O agente de debug (JDWP) saiu das duas imagens e passou a ser ligado pelo Compose, via `JAVA_TOOL_OPTIONS` (portas 5005 e 5006): o enunciado pede só o necessário para executar. O healthcheck troca `curl` por `wget`, porque a imagem `eclipse-temurin:21-jre-alpine` não tem `curl` e o container da aplicação principal ficava `unhealthy` para sempre. O `audit-service` entrou no Compose com `audit-postgres:5432` e a aplicação principal recebe `AUDIT_SERVICE_URL=http://audit-service:8081`, sem `localhost` entre containers. Volume `audit_logs` para o `logs/audit-events.txt` e `POSTGRES_HOST_PORT` para publicar o banco principal fora da 5432. Testado em 02/10: `docker compose up -d --build` do zero, os 4 containers `healthy`; newman contra os containers com 29 requisições e 54 asserções, incluindo derrubar e religar o `audit-service`; evento no `audit_db` e no arquivo do volume |
+| **13** | Claude | Profiles `dev`/`prod` nos dois serviços e variáveis de ambiente (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `AUDIT_SERVICE_URL`). Arrumar `.env`/`.env.example`, que hoje misturam endereços de dentro do Docker (`postgres:5432`, `audit-service:8081`) com a execução local |
+| 14 | Claude | `config-server/` com Spring Cloud Config (backend de arquivos em `config-repo/`); os dois serviços passam a buscar configuração nele; Config Server no Compose |
+| 15 | Jairo + Claude | Reflexão da Etapa 3 no `README.md` (6 perguntas: respostas do Jairo, redação do Claude) e tag `arq-etapa-3` |
+
+A Etapa 2 fechou em 01/10 com a tag `arq-etapa-2`. A sequência que levou à tag, para registro:
 
 | Passo | Quem | Entrega |
 |---|---|---|
@@ -248,8 +257,6 @@ pasta `Fluxo completo`.
 
 Pendências menores fora da sequência:
 
-- O `docker-compose.yml` ainda não repassa `AUDIT_SERVICE_URL` ao container da aplicação principal
-  (entra com o `audit-service` no Compose, dia 11).
 - O `git stash` "IT do audit (plano futuro)" ficou obsoleto: testa o `AuditEventRepositoryAdapter` do
   monolito, apagado no passo 10, e está no layout antigo (`src/` na raiz). O teste de integração das
   consultas faz sentido no `audit-service`, como trabalho futuro.
