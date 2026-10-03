@@ -5,210 +5,65 @@ plano (pagamento simulado) e recebe uma **ApiKey**. Sistemas externos usam essa
 ApiKey para validar, em um único endpoint, se uma requisição pode acessar uma rota
 com determinado cargo.
 
-**Monolito modular** em Java 21 / Spring Boot 4.1.0, construído como projeto de longo
-prazo ao longo da Pós-Graduação: cada disciplina evolui este mesmo código em vez de
-começar um projeto do zero. O que cada uma acrescentou está em
+Um **monolito modular** com um serviço extraído dele, em Java 21 / Spring Boot 4.1.0,
+construído como projeto de longo prazo ao longo da Pós-Graduação: cada disciplina evolui
+este mesmo código em vez de começar um projeto do zero. O que cada uma acrescentou está em
 [Evolução](#evolução).
 
-**Stack:** Java 21 · Spring Boot 4.1.0 · Spring Data JPA · PostgreSQL 16 · Flyway · Spring Modulith · Docker Compose · Maven
+**Stack:** Java 21 · Spring Boot 4.1.0 · Spring Data JPA · PostgreSQL 16 · Flyway · Spring Modulith · Spring Cloud OpenFeign · Spring Cloud Config · Docker Compose · Maven
 
 ---
 
 ## Como rodar
 
-### Pré-requisitos
+Basta Docker com Docker Compose (v2): o build das aplicações acontece dentro das imagens.
 
-- Docker + Docker Compose (v2, comando `docker compose`)
-- Para rodar fora do Docker: JDK 21. O Maven Wrapper (`./mvnw`) já está em cada projeto
-  e baixa a versão certa do Maven sozinho — não precisa ter o Maven instalado.
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
 
-### Estrutura do repositório
+| Container            | Porta | Papel                                                        |
+| -------------------- | ----- | ------------------------------------------------------------ |
+| `permission-service` | 8080  | aplicação principal (monolito modular)                       |
+| `audit-service`      | 8081  | trilha de auditoria, extraída como serviço                   |
+| `config-server`      | 8888  | configuração centralizada, lida de `config-repo/`            |
+| `postgres`           | 5432  | banco da aplicação principal                                 |
+| `audit-postgres`     | 5433  | banco do `audit-service`                                     |
+
+```bash
+curl http://localhost:8080/ping                  # pong
+docker compose ps                                # os cinco como "healthy"
+```
+
+O caminho feliz completo (cliente → plano → ApiKey → projeto → validação → auditoria) está na pasta
+`Fluxo completo` da coleção do Postman em [`docs/postman/`](docs/postman/); todos os endpoints estão
+em [`docs/API.md`](docs/API.md). Profiles, variáveis de ambiente, rodar fora do Docker, debug,
+testes e o que fazer com a porta 5432 ocupada: [`docs/RUNNING.md`](docs/RUNNING.md).
 
 ```
 permission_saas/
-├── permission-service/  aplicação principal (monolito modular) — porta 8080
-├── audit-service/       trilha de auditoria extraída como serviço — porta 8081
+├── permission-service/  aplicação principal (monolito modular)
+├── audit-service/       trilha de auditoria extraída como serviço
+├── config-server/       configuração centralizada (Spring Cloud Config)
+├── config-repo/         os arquivos de configuração que o config-server serve
 ├── docker-compose.yml   orquestra as aplicações e os bancos
 ├── docker/              script de inicialização do Postgres da aplicação principal
 └── docs/                documentação do projeto e de cada disciplina
 ```
 
-Cada aplicação é um projeto Maven independente, com seu próprio `pom.xml`, `mvnw` e
-`Dockerfile`: os comandos `./mvnw` abaixo rodam **dentro** da pasta do projeto. A
-decisão está no ADR-008 de [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-### Profiles e variáveis de ambiente
-
-Cada aplicação tem três arquivos de configuração em `src/main/resources/`:
-
-| Arquivo               | Quando vale                                      | O que tem                                                                                                     |
-| --------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `application.yml`     | sempre                                           | O que não muda entre ambientes: Flyway, `ddl-auto: validate`, timeouts do Feign, actuator, porta via `SERVER_PORT` |
-| `application-dev.yml` | profile `dev`, o padrão quando nenhum é ativado | Banco e `audit-service` em `localhost`, SQL no log, segredos de mentira. **Toda variável tem valor padrão** |
-| `application-prod.yml`| profile `prod`, ativado pelo Docker Compose      | Tudo vem de variável de ambiente, **sem valor padrão**; SQL fora do log                                     |
-
-O profile é escolhido por `SPRING_PROFILES_ACTIVE`. Rodando na máquina (`./mvnw spring-boot:run`
-ou pela IDE), sem nada definido, vale o `dev`: não precisa de `.env` nem de `export`. O Compose
-define `SPRING_PROFILES_ACTIVE=prod` e passa a cada container as variáveis dele. É a mesma imagem
-e o mesmo código; só muda o que vem de fora.
-
-Em `prod`, uma variável que falta impede a subida, de propósito: é melhor não subir do que subir
-apontando para o banco errado. A mensagem nem sempre cita a variável. Sem `AUDIT_SERVICE_URL`, o
-erro é `http://${AUDIT_SERVICE_URL} is malformed`; sem `DB_URL`, é `'url' must start with "jdbc"`.
-
-| Variável                                              | Quem lê    | `dev` (valor padrão)                                         | No Compose (`prod`)                                              |
-| ----------------------------------------------------- | ---------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
-| `SPRING_PROFILES_ACTIVE`                              | os dois    | não definida, vale `dev`                                     | `prod`                                                           |
-| `DB_URL`                                              | os dois    | `localhost:5432/permissions_saas` · `localhost:5433/audit_db` | `postgres:5432/permissions_saas` · `audit-postgres:5432/audit_db` |
-| `DB_USERNAME` / `DB_PASSWORD`                         | os dois    | `saas`/`saas123` · `audit`/`audit123`                        | os mesmos, definidos no `docker-compose.yml`                    |
-| `SERVER_PORT`                                         | os dois    | `8080` · `8081`                                              | não definida (vale o padrão)                                     |
-| `AUDIT_SERVICE_URL`                                   | principal  | `http://localhost:8081`                                      | `http://audit-service:8081`                                      |
-| `SWAGGER_USERNAME` / `SWAGGER_PASSWORD`               | principal  | `admin`/`admin123`                                           | vêm do `.env`                                                    |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `JWT_SECRET` | principal | valores de mentira                                      | vêm do `.env` (\*)                                               |
-| `POSTGRES_HOST_PORT`                                  | o Compose  | —                                                            | `5432`: porta da **máquina** em que o banco principal é publicado |
-
-(\*) OAuth2 e JWT não são usados pelo fluxo implementado. O `SecurityConfig` desabilita o
-`oauth2Login`, e login/JWT é trabalho futuro (ver [Escopo](#escopo)). Mesmo assim, o client do
-Google precisa de um valor não vazio para o contexto subir. Não é preciso criar credencial no Google
-Cloud Console.
-
-Dentro do Compose, os endereços usam o **nome do serviço** (`postgres`, `audit-service`), porque
-num container `localhost` é o próprio container. O `.env` serve só ao Compose:
-
-```bash
-cp .env.example .env
-```
-
-O Compose lê esse arquivo sozinho e repassa aos containers apenas os segredos (Swagger, Google,
-JWT). O Spring Boot não lê `.env`.
-
-### Subir tudo (aplicações + bancos)
-
-```bash
-docker compose up -d --build
-```
-
-Um comando sobe os quatro containers, na rede que o Compose cria para o projeto:
-
-| Container            | Imagem                               | Porta na máquina | Fala com                        |
-| -------------------- | ------------------------------------ | ---------------- | ------------------------------- |
-| `permission-service` | `permission-service/Dockerfile`      | 8080             | `postgres:5432`, `audit-service:8081` |
-| `audit-service`      | `audit-service/Dockerfile`           | 8081             | `audit-postgres:5432`           |
-| `postgres`           | `postgres:16`                        | 5432 (`POSTGRES_HOST_PORT`) | —                    |
-| `audit-postgres`     | `postgres:16`                        | 5433             | —                               |
-
-Os dois containers de aplicação sobem com o profile `prod`. Entre containers o
-endereço é o **nome do serviço** e a porta de dentro, nunca `localhost`. As migrations do Flyway de cada aplicação rodam na subida, cada uma no
-seu banco. Os dados ficam em volumes (`permission_saas_pgdata`, `audit_pgdata`), e o
-arquivo `logs/audit-events.txt` do `audit-service` no volume `audit_logs`: sobrevivem
-a `docker compose down` (só `down -v` apaga).
-
-```bash
-curl http://localhost:8080/ping                  # pong
-curl http://localhost:8081/actuator/health       # {"status":"UP",...}
-docker compose ps                                # os quatro como "healthy"
-```
-
-### Live reload com `docker compose watch`
-
-Em vez de rebuildar a imagem manualmente a cada mudança, `docker compose watch`
-observa o `src/` e o `pom.xml` de cada aplicação, e o `./.env` no caso da principal
-(configurado em `docker-compose.yml`), e rebuilda só o container afetado:
-
-```bash
-docker compose up -d --build   # sobe a stack uma vez
-docker compose watch           # em outro terminal, fica observando e rebuildando
-```
-
-### Debug remoto do container
-
-O agente de debug (JDWP) **não** está dentro das imagens: o `Dockerfile` traz só o
-necessário para rodar a aplicação. Quem liga o debug é o `docker-compose.yml`, pela
-variável `JAVA_TOOL_OPTIONS`, que a JVM lê na partida. A aplicação principal escuta na
-porta `5005` e o `audit-service` na `5006`. Na IDE, anexe (attach) um **Remote JVM
-Debug** em `localhost:5005` ou `localhost:5006`. O processo sobe com `suspend=n`,
-ou seja, não espera o debugger conectar para iniciar.
-
-### Rodar na máquina (profile `dev`)
-
-Só os bancos no Docker; as aplicações na IDE ou no terminal, cada uma no seu:
-
-```bash
-docker compose up -d postgres audit-postgres
-cd permission-service && ./mvnw spring-boot:run   # 8080, banco em localhost:5432
-cd audit-service && ./mvnw spring-boot:run        # 8081, banco em localhost:5433
-```
-
-Nenhuma variável é necessária: o profile `dev` já aponta tudo para `localhost`. Ao
-depurar, um breakpoint parado no `audit-service` estoura o timeout de 2s do cliente
-Feign. Para depurar com calma, suba a aplicação principal com
-`--spring.cloud.openfeign.client.config.audit-service.read-timeout=600000`.
-
-**Porta 5432 ocupada** por um PostgreSQL instalado na máquina: publique o banco do
-Compose em outra porta e aponte a aplicação para ela pela variável `DB_URL`, o mesmo
-mecanismo que o Compose usa. Para não repetir a variável a cada comando, ponha
-`POSTGRES_HOST_PORT=5434` no `.env`, que o Compose lê sozinho:
-
-```bash
-POSTGRES_HOST_PORT=5434 docker compose up -d postgres
-cd permission-service && DB_URL=jdbc:postgresql://localhost:5434/permissions_saas ./mvnw spring-boot:run
-```
-
-### Build e testes
-
-```bash
-cd permission-service
-./mvnw clean package -DskipTests   # build
-./mvnw test                        # testes
-./mvnw test -Dtest=ClassName       # uma classe específica
-./mvnw verify                      # inclui os testes de integração (*IT)
-```
-
----
-
-## Fluxo de ponta a ponta
-
-```bash
-# 1. Cadastrar um cliente (o "id" da resposta é o clientId usado a seguir)
-curl -X POST http://localhost:8080/clients/register \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Jairo Neto","email":"jairo@example.com","phone":"11999999999","rawPassword":"senha123"}'
-
-# 2. Assinar um plano (planId de um plano já existente no banco) e receber a ApiKey
-curl -X POST http://localhost:8080/subscriptions \
-  -H "Content-Type: application/json" \
-  -d '{"clientId":"<uuid do passo 1>","planId":"<uuid do plano>"}'
-
-# 3. Validar uma permissão com a ApiKey recebida
-curl -X POST http://localhost:8080/validate-permission \
-  -H "Content-Type: application/json" \
-  -d '{"apiKey":"<apiKey do passo 2>","role":"admin","route":"/orders"}'
-```
-
-Detalhe de todos os endpoints, request/response e exemplos: [`docs/API.md`](docs/API.md).
+Cada aplicação é um projeto Maven independente, com seu próprio `pom.xml`, `mvnw` e `Dockerfile`
+(ADR-008 em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
 
 ---
 
 ## Arquitetura
 
-Monolito modular: um único deploy, organizado por módulo de domínio, cada um com
-`domain` / `application` / `infrastructure` / `api`.
-
-| Módulo       | Responsabilidade                                                          | Status |
-| ------------ | ------------------------------------------------------------------------- | ------ |
-| `shared`     | Configuração global, `Mapper<I,O>`, tratamento de exceções, `PingController` | ✅     |
-| `identity`   | Cadastro e consulta de `Client`                                           | ✅     |
-| `billing`    | Plano, Assinatura e geração de ApiKey (pagamento simulado)                | ✅     |
-| `permission` | 🔑 Núcleo — middleware de validação de permissão (Chain of Responsibility) | ✅     |
-| `project`    | Projeto/Cargo/Rota e concessões de rota por cargo, respeitando o limite do plano | ✅     |
-| `audit`      | Trilha de auditoria das validações, via Observer                          | ✅     |
-
-Os módulos só conversam por use cases ou eventos — nunca pelo repositório de outro
-módulo. Essa fronteira é verificada pelo Spring Modulith: `./mvnw test` (em `permission-service/`) falha se
-alguém importar um pacote interno de outro módulo.
-
-Detalhes de camadas, regras de comunicação entre módulos e ADRs:
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+A aplicação principal é um monolito modular: um deploy só, organizado por módulo de domínio,
+cada um com `domain` / `application` / `infrastructure` / `api`. Os módulos só conversam por use
+cases ou eventos, nunca pelo repositório de outro módulo. Essa fronteira é verificada pelo Spring
+Modulith: `./mvnw test` (em `permission-service/`) falha se alguém importar um pacote interno de
+outro módulo. Camadas, regras de comunicação e ADRs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Módulos e responsabilidades
 
@@ -317,18 +172,6 @@ Além do CRUD do `JpaRepository`, as consultas que o domínio pede:
   esses filtros rodavam em memória; como a trilha só cresce, desceram para o banco —
   decisão e detalhes no ADR-009 de [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-### Limitação conhecida
-
-Em `permission`, o `TokenValidationHandler` ainda é um stub documentado que sempre
-concede: depende de um 2º fator de autenticação, fora do escopo até aqui. Os outros
-dois handlers aplicam regra real — `ApiKeyValidationHandler` valida a ApiKey contra o
-`billing` e `RoleRouteValidationHandler` verifica a concessão de rota no `project`.
-
-A validação da ApiKey tem duas lacunas registradas como trabalho futuro em
-[`docs/DOMAIN.md`](docs/DOMAIN.md) → "Limitações conhecidas": a chave não é conferida
-contra o dono do projeto, e a busca compara a chave com todas as chaves ativas por
-bcrypt, o que fica mais lento a cada cliente.
-
 ---
 
 ## Serviço independente: `audit-service`
@@ -343,20 +186,14 @@ A extração da etapa 2. O porquê da escolha está em
 | **O que saiu da aplicação principal**   | A persistência da trilha: entidades JPA com herança `SINGLE_TABLE`, repositórios, consultas JPQL, o arquivo `logs/audit-events.txt` e a tabela `audit_events`, apagada pela migration `V10`. O módulo `audit` do monolito ficou só como cliente do serviço                                                       |
 | **Motivo**                              | Nenhum módulo depende da auditoria para decidir algo: o `permission` avisa o que aconteceu e não espera resposta. Os dados não têm chave estrangeira para outras tabelas e crescem a cada validação, num ritmo próprio. E auditoria serve a qualquer sistema, não só a este — ver a [reflexão](#etapa-2--separação-do-audit-service) |
 
-**API REST.** Contrato em DTOs próprios nos dois lados (`RegisterPermissionCheckRequest`,
-`AuditEventResponse`); nenhuma entidade JPA atravessa a rede. Swagger em
+**API REST.** `POST /audit-events/permission-checks` registra uma validação (`201`/`400`) e
+`GET /audit-events` consulta a trilha com filtros opcionais (`200`/`400`). O contrato são DTOs
+próprios nos dois lados; nenhuma entidade JPA atravessa a rede. Swagger em
 `http://localhost:8081/swagger-ui/index.html`; detalhes em [`docs/API.md`](docs/API.md).
 
-| Método | Caminho                           | O que faz                                                                     | Respostas      |
-| ------ | --------------------------------- | ----------------------------------------------------------------------------- | -------------- |
-| `POST` | `/audit-events/permission-checks` | Registra uma validação de permissão                                           | `201`, `400` |
-| `GET`  | `/audit-events`                   | Consulta a trilha, com filtros opcionais `type`, `projectId`, `onlyDenied`, `from` e `to` | `200`, `400` |
-
-**Comunicação.** A aplicação principal chama o serviço pelo cliente OpenFeign
-`AuditClient`, sempre atrás da porta `AuditTrail` — nenhum controller conhece o Feign.
-O endereço vem de `audit.service.url`, preenchido pela variável `AUDIT_SERVICE_URL`
-(`http://localhost:8081` no profile `dev`, `http://audit-service:8081` no Compose), nunca
-do código Java.
+**Comunicação.** A aplicação principal chama o serviço pelo cliente OpenFeign `AuditClient`,
+sempre atrás da porta `AuditTrail`: nenhum controller conhece o Feign. O endereço vem da
+configuração (`audit.service.url`), nunca do código Java.
 
 ```
 Cliente HTTP
@@ -437,6 +274,60 @@ tratamento de dados pessoais. Com esse horizonte, desacoplar a auditoria do proj
 principal foi uma escolha válida. A direção está registrada em
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → "Direção futura".
 
+### Etapa 3 — configuração e execução
+
+**Quais configurações da aplicação podem variar entre ambientes?** O endereço, o usuário e a senha
+de cada banco; o endereço do `audit-service`; a porta de cada aplicação; os segredos (usuário do
+Swagger, chaves do Google e do JWT); e o comportamento de execução, como o log de SQL e o debug
+remoto. O mesmo banco está em `localhost:5432` na máquina e em `postgres:5432` dentro do Compose.
+
+**Quais dessas configurações foram externalizadas?** Todas. Nenhuma fica no código Java:
+
+| Configuração                    | Onde fica                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Profile ativo                   | `SPRING_PROFILES_ACTIVE`: `dev` por padrão, `prod` no Compose                                     |
+| Porta                           | `SERVER_PORT`, com valor padrão no `application.yml`                                              |
+| Endereço do banco               | `dev`: `DB_URL`, com padrão `localhost`; `prod`: Config Server (`config-repo/<serviço>-prod.yml`) |
+| Usuário e senha do banco        | `DB_USERNAME` / `DB_PASSWORD`; no `prod`, sem valor padrão                                        |
+| Endereço do `audit-service`     | `dev`: `AUDIT_SERVICE_URL`; `prod`: Config Server                                                 |
+| Log de SQL                      | `application-dev.yml` (ligado) e `config-repo/application-prod.yml` (desligado)                   |
+| Segredos (Swagger, Google, JWT) | variáveis de ambiente; no Compose, vêm do `.env`                                                  |
+| Debug remoto                    | `JAVA_TOOL_OPTIONS` no `docker-compose.yml`, fora da imagem                                       |
+
+Ficaram de fora os timeouts do Feign, iguais em todo ambiente, e as senhas dos bancos de
+desenvolvimento, escritas no `docker-compose.yml`; num ambiente real viriam de um cofre de segredos.
+
+**Por que um serviço não deve acessar diretamente o banco de outro serviço?** Tecnicamente funciona,
+mas é um erro de arquitetura:
+
+- **Confiabilidade dos dados:** quem grava por fora pula as regras do dono, como a validação do
+  `POST /audit-events/permission-checks`.
+- **Dois serviços presos ao mesmo banco:** se a aplicação principal lesse `audit_events`, renomear
+  uma coluna no `audit-service` a quebraria, e os dois deixariam de evoluir separados, que foi o
+  motivo da extração.
+- **Segurança:** com um dono só, a API é a barreira e os DTOs são o contrato. A aplicação principal
+  nem tem a senha do `audit_db`.
+
+**Qual problema o Docker resolve no projeto?** O "na minha máquina funciona". A imagem leva a
+aplicação junto com o ambiente de que ela precisa (o Java 21 e o jar) e roda igual em qualquer
+máquina, isolada no seu container. Na prática: o PostgreSQL instalado na máquina do autor ocupa a
+5432 e os bancos do projeto rodam sem conflito com ele; e não é preciso ter JDK nem Maven para subir
+a solução, porque o build acontece dentro da imagem.
+
+**Qual é a função do Docker Compose?** Orquestrar os containers localmente. Um arquivo descreve a
+solução inteira (os cinco containers, as variáveis, as portas, os volumes e a rede interna em que eles
+se acham pelo nome, como `audit-service:8081`), e `docker compose up` sobe tudo na ordem certa: os
+serviços só partem depois que o Config Server e o banco de cada um respondem ao healthcheck. O
+Compose centraliza *como a solução roda*; *o que cada serviço configura* fica com o Config Server.
+
+**Qual problema uma configuração centralizada procura resolver?** Um sistema tem vários ambientes
+(desenvolvimento, testes, homologação, produção), cada um com sua configuração. Espalhada, mudar uma
+integração exige mexer em cada serviço; centralizada, cada ambiente fica organizado em arquivos e
+cada serviço busca a sua na subida. No projeto, `config-repo/application-prod.yml` configura os dois
+serviços de uma vez, e uma mudança vale depois de reiniciar o serviço, sem imagem nova. O
+desenvolvimento ficou de fora de propósito, para não exigir o Config Server na máquina (ADR-012), e
+segredos não vão para lá, porque ele entrega a configuração em texto puro.
+
 ---
 
 ## Padrões de projeto
@@ -462,11 +353,17 @@ geração de ApiKey, middleware de validação de permissão aplicando a regra r
 (o cargo precisa de uma concessão ativa sobre a rota), CRUD de projeto/cargo/rota com
 histórico de concessão e revogação, e trilha de auditoria em banco e arquivo texto —
 desde a etapa 2 no [`audit-service`](#serviço-independente-audit-service), chamado por
-OpenFeign.
+OpenFeign. Desde a etapa 3, as três aplicações rodam em containers com Docker Compose, com
+profiles `dev`/`prod` e configuração centralizada num Config Server.
 
-**Em desenvolvimento:** configuração centralizada, mensageria e processamento em
-lote — o restante do escopo da disciplina de microsserviços, descrito em
+**Em desenvolvimento:** mensageria e processamento em lote — o restante do escopo
+da disciplina de microsserviços, descrito em
 [Evolução](#evolução).
+
+**Limitações conhecidas:** o `TokenValidationHandler` é um stub documentado que sempre concede
+(depende de um 2º fator de autenticação), e a validação da ApiKey não confere o dono do projeto nem
+evita comparar a chave por bcrypt com todas as chaves ativas
+([`docs/DOMAIN.md`](docs/DOMAIN.md) → "Limitações conhecidas").
 
 **Trabalho futuro:** gateway de pagamento real, autenticação/JWT com Spring Security,
 exportação CSV/JSON, front-end, `userId` no evento de auditoria, uma aplicação
@@ -503,6 +400,7 @@ descrevendo o sistema como ele está hoje:
 
 | Arquivo                                                   | Conteúdo                                                                              |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [`docs/RUNNING.md`](docs/RUNNING.md)                     | Como subir, configurar (profiles, variáveis, Config Server), depurar e testar          |
 | [`docs/API.md`](docs/API.md)                             | Todos os endpoints REST implementados, com request/response e exemplos de curl         |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)           | Módulos, camadas, regras de comunicação, ADRs                                       |
 | [`docs/DOMAIN.md`](docs/DOMAIN.md)                       | Glossário de entidades, value objects e invariantes de negócio                       |

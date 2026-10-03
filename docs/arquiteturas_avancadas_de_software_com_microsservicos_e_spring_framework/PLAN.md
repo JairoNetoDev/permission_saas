@@ -188,10 +188,10 @@ Aplicação Principal → permissions_saas      audit-service → audit_db
 
 | Dia | Data      | Horas | Entrega                                                                                                                                                                                                                                                  |
 | --- | --------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 8   | Ter 29/09 | 1h    | `application-dev`/`application-prod` nos três serviços; variáveis de ambiente (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `AUDIT_SERVICE_URL`); `.env.example` atualizado                                                                  |
+| 8 ✅ | Ter 29/09 | 1h    | **Feito em 02/10** (passo 13 de "Onde parou"): `application-dev`/`application-prod` nos dois serviços, variáveis `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `AUDIT_SERVICE_URL`, `SERVER_PORT`; `.env.example` só com o que o Compose repassa (ADR-011) |
 | 9 ✅ | Qua 30/09 | 1h    | **Metade feita em 28/09:** o `audit-service` já nasceu com banco próprio (`audit_db`, container `audit-postgres`, usuário `audit`, porta 5433). **Resto em 30/09:** migration `V10` na aplicação principal removendo `audit_events`, junto com a persistência local do `audit` (ADR-010) |
-| 10  | Qui 01/10 | 1h    | `config-server/` com Spring Cloud Config (backend de arquivos versionado em `config-repo/`); aplicação principal e `audit-service` passam a buscar configuração nele                                                                           |
-| 11  | Sex 02/10 | 1h    | `Dockerfile` do `audit-service` e do `config-server`; `docker-compose.yml` subindo tudo em rede própria (sem `localhost` entre containers); reflexão arquitetural da Etapa 3 → **tag `arq-etapa-3`** |
+| 10 ✅ | Qui 01/10 | 1h    | **Feito em 02/10** (passo 14): `config-server/` com backend `native` lendo `config-repo/`; os dois serviços buscam nele, no `prod`, os endereços e o log de SQL (ADR-012) |
+| 11 ✅ | Sex 02/10 | 1h    | **Feito em 02/10** (passos 12 e 15): `Dockerfile` do `audit-service` e do `config-server`; `docker-compose.yml` com os cinco containers na rede do Compose, sem `localhost` entre eles; reflexão da Etapa 3 no `README.md` → **tag `arq-etapa-3`** |
 
 ### Etapa 4 — Assíncrono e Batch (03–05/10)
 
@@ -216,7 +216,7 @@ cada dia.
 | Seg 28/09 | 2 | Consultas do `audit`, documentação, tag `arq-etapa-1` |
 | ~~Ter 29 – Qua 30/09~~ Seg 28/09 ✅ | 4, 5 e 9 (metade) | `audit-service`: esqueleto, `POST`/`GET`, banco próprio — adiantado. De carona, a aplicação principal saiu da raiz para `permission-service/` (ADR-008 revisado) |
 | Ter 29/09 – Qui 01/10 | 6, 7 e 9 (resto) | Feign (gravação e consulta), indisponibilidade, remoção do `audit` do monolito, testes pelo Postman/Swagger, tag `arq-etapa-2` — a folga ganha no `audit-service` vai para cá. **Situação em 01/10:** a terça não rendeu código e consumiu a folga; os passos 6 a 10 fecharam na quarta (30/09) e o 11 na quinta (01/10), com a tag `arq-etapa-2`. Em dia com este replanejamento, sem margem |
-| Sex 02/10 | 8 e 11 | Profiles, variáveis de ambiente, `Dockerfile` e Compose, tag `arq-etapa-3`. É o dia mais apertado: proposta de divisão — Claude faz a parte mecânica (`Dockerfile` do `audit-service`, Compose, profiles), Jairo as decisões e a reflexão |
+| Sex 02/10 | 8 e 11 | Profiles, variáveis de ambiente, `Dockerfile` e Compose, tag `arq-etapa-3`. É o dia mais apertado: proposta de divisão — Claude faz a parte mecânica (`Dockerfile` do `audit-service`, Compose, profiles), Jairo as decisões e a reflexão. **Situação em 02/10:** feito, com o Config Server (dia 10) adiantado do fim de semana; Jairo decidiu que o Claude escrevesse a parte de Docker e explicasse depois |
 | Sáb 03 – Dom 04/10 | 12 e 13 | RabbitMQ e Batch, tag `arq-etapa-4`; Config Server (dia 10) só se sobrar tempo |
 | Seg 05/10 | 14 | Buffer, seção **Uso de IA**, entrega |
 
@@ -228,15 +228,16 @@ pelo teste de integração das consultas do ADR-009.
 
 ### Onde parou (atualizado em 02/10)
 
-**Etapa 3 em andamento.** Docker e profiles fecharam em 02/10; retomar pelo **passo 14** (Config Server). A sequência até
-a tag `arq-etapa-3`:
+**Etapa 3 fechada em 02/10 com a tag `arq-etapa-3`.** Retomar pela **Etapa 4** (dias 12 e 13: RabbitMQ e
+Spring Batch). O Config Server, que o replanejamento empurrava para o fim de semana, já está feito.
+A sequência que levou à tag, para registro:
 
 | Passo | Quem | Entrega |
 |---|---|---|
 | 12 ✅ | Claude (rascunho do `Dockerfile` do `audit-service` pelo Jairo) | `audit-service/Dockerfile` (multi-stage, como o da aplicação principal) e `.dockerignore` nos dois projetos. O agente de debug (JDWP) saiu das duas imagens e passou a ser ligado pelo Compose, via `JAVA_TOOL_OPTIONS` (portas 5005 e 5006): o enunciado pede só o necessário para executar. O healthcheck troca `curl` por `wget`, porque a imagem `eclipse-temurin:21-jre-alpine` não tem `curl` e o container da aplicação principal ficava `unhealthy` para sempre. O `audit-service` entrou no Compose com `audit-postgres:5432` e a aplicação principal recebe `AUDIT_SERVICE_URL=http://audit-service:8081`, sem `localhost` entre containers. Volume `audit_logs` para o `logs/audit-events.txt` e `POSTGRES_HOST_PORT` para publicar o banco principal fora da 5432. Testado em 02/10: `docker compose up -d --build` do zero, os 4 containers `healthy`; newman contra os containers com 29 requisições e 54 asserções, incluindo derrubar e religar o `audit-service`; evento no `audit_db` e no arquivo do volume |
 | 13 ✅ | Claude | `application.yml` comum + `application-dev.yml` (padrão; valores para `localhost`, SQL no log, nenhuma variável obrigatória) + `application-prod.yml` (tudo de variável, **sem valor padrão**, SQL fora do log) nos dois serviços (**ADR-011**). Variáveis `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `AUDIT_SERVICE_URL`, `SERVER_PORT`; o Compose ativa `prod`; o `.env` fica só com os segredos que o Compose repassa e `POSTGRES_HOST_PORT`. Testado em 02/10: `clean verify` (22 + 9 testes); os dois serviços em `dev` sem `.env`, com porta, banco e URL trocados por variável; os dois em `prod` sem variáveis recusam subir; Compose em `prod` com newman, 30 requisições e 55 asserções, sem SQL no log e Swagger exigindo senha |
-| **14** | Claude | `config-server/` com Spring Cloud Config (backend de arquivos em `config-repo/`); os dois serviços passam a buscar configuração nele; Config Server no Compose |
-| 15 | Jairo + Claude | Reflexão da Etapa 3 no `README.md` (6 perguntas: respostas do Jairo, redação do Claude) e tag `arq-etapa-3` |
+| 14 ✅ | Claude | `config-server/` (porta 8888, backend `native` lendo `config-repo/` montado como volume); no `prod`, os dois serviços importam `configserver:${CONFIG_SERVER_URL}` e recebem dele os endereços (banco, `audit-service`) e o log de SQL; segredos seguem em variáveis; `dev` e `test` desligam o cliente (**ADR-012**). `spring.application.name` da aplicação principal vira `permission-service`. Pasta `config-server (8888)` no Postman. Testado em 02/10: `clean verify`; `dev` sobe sem o Config Server; Compose com 5 containers `healthy`; newman com 30 requisições e 55 asserções, mais 7 asserções na pasta nova; `show-sql` trocado só no `config-repo/` valeu depois de `docker compose restart`, sem rebuild; com o Config Server parado, o `audit-service` não sobe (`ConfigClientFailFastException`) |
+| 15 ✅ | Jairo + Claude | Reflexão da Etapa 3 no `README.md` (perguntas 1 e 2 a partir do que foi feito; 3 a 6 com as respostas do Jairo, redação do Claude). De carona, o `README.md` foi enxugado de 625 para ~420 linhas: o guia de ambiente (profiles, variáveis, Config Server, rodar fora do Docker, debug, testes) foi para o novo `docs/RUNNING.md`, e o fluxo em `curl` desatualizado deu lugar à pasta `Fluxo completo` do Postman. Tag `arq-etapa-3` |
 
 A Etapa 2 fechou em 01/10 com a tag `arq-etapa-2`. A sequência que levou à tag, para registro:
 
