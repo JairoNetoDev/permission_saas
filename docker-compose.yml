@@ -40,9 +40,10 @@ services:
       audit-postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://audit-postgres:5432/audit_db
-      SPRING_DATASOURCE_USERNAME: audit
-      SPRING_DATASOURCE_PASSWORD: audit123
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://audit-postgres:5432/audit_db
+      DB_USERNAME: audit
+      DB_PASSWORD: audit123
       JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006
     volumes:
       - audit_logs:/app/logs
@@ -70,13 +71,16 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/permissions_saas
-      SPRING_DATASOURCE_USERNAME: saas
-      SPRING_DATASOURCE_PASSWORD: saas123
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/permissions_saas
+      DB_USERNAME: saas
+      DB_PASSWORD: saas123
       AUDIT_SERVICE_URL: http://audit-service:8081
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       JWT_SECRET: ${JWT_SECRET}
+      SWAGGER_USERNAME: ${SWAGGER_USERNAME}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD}
       JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]

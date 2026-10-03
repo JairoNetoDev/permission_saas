@@ -1,11 +1,12 @@
+# Configuração comum a todos os ambientes. O que muda entre eles (banco, log de
+# SQL) fica em application-dev.yml e application-prod.yml.
 spring:
   application:
     name: audit-service
 
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/audit_db}
-    username: ${SPRING_DATASOURCE_USERNAME:audit}
-    password: ${SPRING_DATASOURCE_PASSWORD:audit123}
+  # Sem SPRING_PROFILES_ACTIVE, sobe como desenvolvimento. O Docker Compose ativa o prod.
+  profiles:
+    default: dev
 
   jpa:
     hibernate:
@@ -17,7 +18,7 @@ spring:
     locations: classpath:db/migration
 
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
 
 management:
   endpoints:

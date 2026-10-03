@@ -1,0 +1,11 @@
+# Produção: o banco vem de variável de ambiente, sem valor padrão. Se faltar
+# alguma, o serviço não sobe. No Docker Compose, quem fornece os valores é o
+# docker-compose.yml.
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    show-sql: false
