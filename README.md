@@ -37,31 +37,50 @@ Cada aplicação é um projeto Maven independente, com seu próprio `pom.xml`, `
 `Dockerfile`: os comandos `./mvnw` abaixo rodam **dentro** da pasta do projeto. A
 decisão está no ADR-008 de [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-### Variáveis de ambiente
+### Profiles e variáveis de ambiente
+
+Cada aplicação tem três arquivos de configuração em `src/main/resources/`:
+
+| Arquivo               | Quando vale                                      | O que tem                                                                                                     |
+| --------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `application.yml`     | sempre                                           | O que não muda entre ambientes: Flyway, `ddl-auto: validate`, timeouts do Feign, actuator, porta via `SERVER_PORT` |
+| `application-dev.yml` | profile `dev`, o padrão quando nenhum é ativado | Banco e `audit-service` em `localhost`, SQL no log, segredos de mentira. **Toda variável tem valor padrão** |
+| `application-prod.yml`| profile `prod`, ativado pelo Docker Compose      | Tudo vem de variável de ambiente, **sem valor padrão**; SQL fora do log                                     |
+
+O profile é escolhido por `SPRING_PROFILES_ACTIVE`. Rodando na máquina (`./mvnw spring-boot:run`
+ou pela IDE), sem nada definido, vale o `dev`: não precisa de `.env` nem de `export`. O Compose
+define `SPRING_PROFILES_ACTIVE=prod` e passa a cada container as variáveis dele. É a mesma imagem
+e o mesmo código; só muda o que vem de fora.
+
+Em `prod`, uma variável que falta impede a subida, de propósito: é melhor não subir do que subir
+apontando para o banco errado. A mensagem nem sempre cita a variável. Sem `AUDIT_SERVICE_URL`, o
+erro é `http://${AUDIT_SERVICE_URL} is malformed`; sem `DB_URL`, é `'url' must start with "jdbc"`.
+
+| Variável                                              | Quem lê    | `dev` (valor padrão)                                         | No Compose (`prod`)                                              |
+| ----------------------------------------------------- | ---------- | ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `SPRING_PROFILES_ACTIVE`                              | os dois    | não definida, vale `dev`                                     | `prod`                                                           |
+| `DB_URL`                                              | os dois    | `localhost:5432/permissions_saas` · `localhost:5433/audit_db` | `postgres:5432/permissions_saas` · `audit-postgres:5432/audit_db` |
+| `DB_USERNAME` / `DB_PASSWORD`                         | os dois    | `saas`/`saas123` · `audit`/`audit123`                        | os mesmos, definidos no `docker-compose.yml`                    |
+| `SERVER_PORT`                                         | os dois    | `8080` · `8081`                                              | não definida (vale o padrão)                                     |
+| `AUDIT_SERVICE_URL`                                   | principal  | `http://localhost:8081`                                      | `http://audit-service:8081`                                      |
+| `SWAGGER_USERNAME` / `SWAGGER_PASSWORD`               | principal  | `admin`/`admin123`                                           | vêm do `.env`                                                    |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `JWT_SECRET` | principal | valores de mentira                                      | vêm do `.env` (\*)                                               |
+| `POSTGRES_HOST_PORT`                                  | o Compose  | —                                                            | `5432`: porta da **máquina** em que o banco principal é publicado |
+
+(\*) OAuth2 e JWT não são usados pelo fluxo implementado. O `SecurityConfig` desabilita o
+`oauth2Login`, e login/JWT é trabalho futuro (ver [Escopo](#escopo)). Mesmo assim, o client do
+Google precisa de um valor não vazio para o contexto subir. Não é preciso criar credencial no Google
+Cloud Console.
+
+Dentro do Compose, os endereços usam o **nome do serviço** (`postgres`, `audit-service`), porque
+num container `localhost` é o próprio container. O `.env` serve só ao Compose:
 
 ```bash
 cp .env.example .env
 ```
 
-| Variável                                                 | Usada de fato? | Para quê                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | ✅             | Conexão com o Postgres. Têm default em`application.yml` (`localhost:5432`, `saas`/`saas123`), então nem precisam estar no `.env` para rodar `./mvnw spring-boot:run` com `docker compose up -d postgres`.                                                                                                                                                                                                                                                                                                                                                |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`           | ❌             | `application.yml` referencia `${GOOGLE_CLIENT_ID}` para registrar o client OAuth2 do Google, mas `SecurityConfig` desabilita `oauth2Login` explicitamente (`.oauth2Login(oauth2 -> oauth2.disable())`) e libera todas as rotas (`anyRequest().permitAll()`). Login/JWT ainda não foram implementados (ver [Escopo](#escopo)). A variável só precisa existir com **qualquer valor não vazio** — sem isso o Spring falha ao resolver o placeholder e a aplicação nem sobe. Não há necessidade de criar credenciais reais no Google Cloud Console. |
-| `JWT_SECRET`                                            | ❌             | Mesmo motivo acima — referenciada em`application.yml` (`app.jwt.secret`), mas nenhum código gera ou valida JWT ainda.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `AUDIT_SERVICE_URL`                                     | ✅             | Endereço do `audit-service`, usado pelo cliente OpenFeign da aplicação principal (`audit.service.url` no `application.yml`). Default `http://localhost:8081`, o serviço rodando na máquina. No Docker Compose, o próprio `docker-compose.yml` define `http://audit-service:8081`: o nome do serviço na rede interna, porque dentro de um container `localhost` é o próprio container. |
-| `POSTGRES_HOST_PORT`                                    | ✅             | Porta da **sua máquina** em que o Compose publica o banco da aplicação principal. Default `5432`; use outra (ex.: `5434`) se um PostgreSQL instalado na máquina já ocupa a 5432. Só muda o acesso de fora: entre containers o banco continua em `postgres:5432`. |
-
-`docker compose up` lê o `.env` automaticamente e já sobrescreve as credenciais do
-Postgres com os valores fixos do `docker-compose.yml` — o `.env` importa mesmo é
-para `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`JWT_SECRET`, que não têm default.
-
-Se for rodar a aplicação fora do Docker (`./mvnw spring-boot:run`), o `.env` **não**
-é carregado automaticamente pelo Spring Boot — exporte as variáveis no shell antes:
-
-```bash
-set -a && source .env && set +a
-cd permission-service && ./mvnw spring-boot:run
-```
+O Compose lê esse arquivo sozinho e repassa aos containers apenas os segredos (Swagger, Google,
+JWT). O Spring Boot não lê `.env`.
 
 ### Subir tudo (aplicações + bancos)
 
@@ -78,8 +97,8 @@ Um comando sobe os quatro containers, na rede que o Compose cria para o projeto:
 | `postgres`           | `postgres:16`                        | 5432 (`POSTGRES_HOST_PORT`) | —                    |
 | `audit-postgres`     | `postgres:16`                        | 5433             | —                               |
 
-Entre containers o endereço é o **nome do serviço** e a porta de dentro, nunca
-`localhost`. As migrations do Flyway de cada aplicação rodam na subida, cada uma no
+Os dois containers de aplicação sobem com o profile `prod`. Entre containers o
+endereço é o **nome do serviço** e a porta de dentro, nunca `localhost`. As migrations do Flyway de cada aplicação rodam na subida, cada uma no
 seu banco. Os dados ficam em volumes (`permission_saas_pgdata`, `audit_pgdata`), e o
 arquivo `logs/audit-events.txt` do `audit-service` no volume `audit_logs`: sobrevivem
 a `docker compose down` (só `down -v` apaga).
@@ -110,51 +129,30 @@ porta `5005` e o `audit-service` na `5006`. Na IDE, anexe (attach) um **Remote J
 Debug** em `localhost:5005` ou `localhost:5006`. O processo sobe com `suspend=n`,
 ou seja, não espera o debugger conectar para iniciar.
 
-### Rodar só o banco (desenvolvimento local)
+### Rodar na máquina (profile `dev`)
+
+Só os bancos no Docker; as aplicações na IDE ou no terminal, cada uma no seu:
 
 ```bash
-docker compose up -d postgres
-cd permission-service && ./mvnw spring-boot:run
+docker compose up -d postgres audit-postgres
+cd permission-service && ./mvnw spring-boot:run   # 8080, banco em localhost:5432
+cd audit-service && ./mvnw spring-boot:run        # 8081, banco em localhost:5433
 ```
 
-O `audit-service` tem banco próprio. Rode-o num terminal **sem** o `.env` da raiz
-exportado — as variáveis `SPRING_DATASOURCE_*` de lá apontam para o banco da
-aplicação principal e teriam precedência sobre o `application.yml` do serviço:
-
-```bash
-docker compose up -d audit-postgres
-cd audit-service && ./mvnw spring-boot:run
-```
-
-Para testar a comunicação entre os dois, suba os dois serviços ao mesmo tempo, cada um
-no seu terminal (ou cada um numa configuração de launch da IDE, a do `audit-service`
-sem o `.env`). Ao depurar, um breakpoint parado no `audit-service` estoura o timeout de
-2s do cliente Feign; para depurar com calma, suba a aplicação principal com
+Nenhuma variável é necessária: o profile `dev` já aponta tudo para `localhost`. Ao
+depurar, um breakpoint parado no `audit-service` estoura o timeout de 2s do cliente
+Feign. Para depurar com calma, suba a aplicação principal com
 `--spring.cloud.openfeign.client.config.audit-service.read-timeout=600000`.
 
-**Porta 5432 ocupada** por um PostgreSQL instalado na máquina. Com o Compose, basta
-publicar o banco em outra porta. Para não repetir a variável a cada comando, ponha
-`POSTGRES_HOST_PORT=5434` no `.env`:
+**Porta 5432 ocupada** por um PostgreSQL instalado na máquina: publique o banco do
+Compose em outra porta e aponte a aplicação para ela pela variável `DB_URL`, o mesmo
+mecanismo que o Compose usa. Para não repetir a variável a cada comando, ponha
+`POSTGRES_HOST_PORT=5434` no `.env`, que o Compose lê sozinho:
 
 ```bash
-POSTGRES_HOST_PORT=5434 docker compose up -d --build
+POSTGRES_HOST_PORT=5434 docker compose up -d postgres
+cd permission-service && DB_URL=jdbc:postgresql://localhost:5434/permissions_saas ./mvnw spring-boot:run
 ```
-
-Rodando a aplicação fora do Docker, suba o banco num container avulso em outra porta,
-com o mesmo volume do Compose, e aponte a aplicação para ela:
-
-```bash
-docker run -d --rm --name permission-pg-5434 -e POSTGRES_DB=permissions_saas \
-  -e POSTGRES_USER=saas -e POSTGRES_PASSWORD=saas123 \
-  -v permission_saas_permission_saas_pgdata:/var/lib/postgresql/data -p 5434:5432 postgres:16
-set -a && source .env && set +a
-export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5434/permissions_saas \
-  SPRING_DATASOURCE_USERNAME=saas SPRING_DATASOURCE_PASSWORD=saas123
-cd permission-service && ./mvnw spring-boot:run
-```
-
-`--rm` remove o container quando ele para (`docker stop permission-pg-5434`); os dados
-ficam no volume.
 
 ### Build e testes
 
@@ -356,8 +354,9 @@ A extração da etapa 2. O porquê da escolha está em
 
 **Comunicação.** A aplicação principal chama o serviço pelo cliente OpenFeign
 `AuditClient`, sempre atrás da porta `AuditTrail` — nenhum controller conhece o Feign.
-O endereço vem de `audit.service.url` no `application.yml`
-(`${AUDIT_SERVICE_URL:http://localhost:8081}`), nunca do código Java.
+O endereço vem de `audit.service.url`, preenchido pela variável `AUDIT_SERVICE_URL`
+(`http://localhost:8081` no profile `dev`, `http://audit-service:8081` no Compose), nunca
+do código Java.
 
 ```
 Cliente HTTP

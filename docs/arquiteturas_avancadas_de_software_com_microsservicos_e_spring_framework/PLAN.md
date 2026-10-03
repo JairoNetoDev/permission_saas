@@ -228,14 +228,14 @@ pelo teste de integração das consultas do ADR-009.
 
 ### Onde parou (atualizado em 02/10)
 
-**Etapa 3 em andamento.** A parte de Docker fechou em 02/10; retomar pelo **passo 13**. A sequência até
+**Etapa 3 em andamento.** Docker e profiles fecharam em 02/10; retomar pelo **passo 14** (Config Server). A sequência até
 a tag `arq-etapa-3`:
 
 | Passo | Quem | Entrega |
 |---|---|---|
 | 12 ✅ | Claude (rascunho do `Dockerfile` do `audit-service` pelo Jairo) | `audit-service/Dockerfile` (multi-stage, como o da aplicação principal) e `.dockerignore` nos dois projetos. O agente de debug (JDWP) saiu das duas imagens e passou a ser ligado pelo Compose, via `JAVA_TOOL_OPTIONS` (portas 5005 e 5006): o enunciado pede só o necessário para executar. O healthcheck troca `curl` por `wget`, porque a imagem `eclipse-temurin:21-jre-alpine` não tem `curl` e o container da aplicação principal ficava `unhealthy` para sempre. O `audit-service` entrou no Compose com `audit-postgres:5432` e a aplicação principal recebe `AUDIT_SERVICE_URL=http://audit-service:8081`, sem `localhost` entre containers. Volume `audit_logs` para o `logs/audit-events.txt` e `POSTGRES_HOST_PORT` para publicar o banco principal fora da 5432. Testado em 02/10: `docker compose up -d --build` do zero, os 4 containers `healthy`; newman contra os containers com 29 requisições e 54 asserções, incluindo derrubar e religar o `audit-service`; evento no `audit_db` e no arquivo do volume |
-| **13** | Claude | Profiles `dev`/`prod` nos dois serviços e variáveis de ambiente (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `AUDIT_SERVICE_URL`). Arrumar `.env`/`.env.example`, que hoje misturam endereços de dentro do Docker (`postgres:5432`, `audit-service:8081`) com a execução local |
-| 14 | Claude | `config-server/` com Spring Cloud Config (backend de arquivos em `config-repo/`); os dois serviços passam a buscar configuração nele; Config Server no Compose |
+| 13 ✅ | Claude | `application.yml` comum + `application-dev.yml` (padrão; valores para `localhost`, SQL no log, nenhuma variável obrigatória) + `application-prod.yml` (tudo de variável, **sem valor padrão**, SQL fora do log) nos dois serviços (**ADR-011**). Variáveis `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `AUDIT_SERVICE_URL`, `SERVER_PORT`; o Compose ativa `prod`; o `.env` fica só com os segredos que o Compose repassa e `POSTGRES_HOST_PORT`. Testado em 02/10: `clean verify` (22 + 9 testes); os dois serviços em `dev` sem `.env`, com porta, banco e URL trocados por variável; os dois em `prod` sem variáveis recusam subir; Compose em `prod` com newman, 30 requisições e 55 asserções, sem SQL no log e Swagger exigindo senha |
+| **14** | Claude | `config-server/` com Spring Cloud Config (backend de arquivos em `config-repo/`); os dois serviços passam a buscar configuração nele; Config Server no Compose |
 | 15 | Jairo + Claude | Reflexão da Etapa 3 no `README.md` (6 perguntas: respostas do Jairo, redação do Claude) e tag `arq-etapa-3` |
 
 A Etapa 2 fechou em 01/10 com a tag `arq-etapa-2`. A sequência que levou à tag, para registro:
