@@ -1,0 +1,10 @@
+# Aplicação principal no profile prod (Docker Compose). Os endereços são os da rede
+# do Compose: nome do serviço e porta de dentro, nunca localhost. Usuário e senha do
+# banco não ficam aqui: vêm de variáveis de ambiente.
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/permissions_saas
+
+audit:
+  service:
+    url: http://audit-service:8081

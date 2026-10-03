@@ -1,0 +1,5 @@
+# audit-service no profile prod (Docker Compose). Usuário e senha do banco não ficam
+# aqui: vêm de variáveis de ambiente.
+spring:
+  datasource:
+    url: jdbc:postgresql://audit-postgres:5432/audit_db

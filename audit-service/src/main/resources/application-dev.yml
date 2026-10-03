@@ -2,6 +2,11 @@
 # em localhost:5433 (o audit-postgres do Compose). Toda variável tem valor padrão,
 # então nenhuma é obrigatória.
 spring:
+  # Em desenvolvimento o serviço não depende do Config Server.
+  cloud:
+    config:
+      enabled: false
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/audit_db}
     username: ${DB_USERNAME:audit}

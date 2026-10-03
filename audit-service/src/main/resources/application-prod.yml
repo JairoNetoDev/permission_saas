@@ -1,11 +1,11 @@
-# Produção: o banco vem de variável de ambiente, sem valor padrão. Se faltar
-# alguma, o serviço não sobe. No Docker Compose, quem fornece os valores é o
-# docker-compose.yml.
+# Produção: o endereço do banco e o log de SQL vêm do Config Server, em
+# config-repo/audit-service-prod.yml. Usuário e senha vêm de variáveis de ambiente,
+# sem valor padrão. Se o Config Server não responder ou faltar uma variável, o
+# serviço não sobe.
 spring:
+  config:
+    import: configserver:${CONFIG_SERVER_URL}
+
   datasource:
-    url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-
-  jpa:
-    show-sql: false

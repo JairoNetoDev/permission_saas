@@ -1,0 +1,4 @@
+# Vale para todos os serviços no profile prod.
+spring:
+  jpa:
+    show-sql: false

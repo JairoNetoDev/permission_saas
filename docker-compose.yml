@@ -32,16 +32,35 @@ services:
       timeout: 5s
       retries: 5
 
+  config-server:
+    build:
+      context: ./config-server
+      dockerfile: Dockerfile
+    environment:
+      CONFIG_REPO_LOCATION: file:/config-repo
+    volumes:
+      - ./config-repo:/config-repo:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8888/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "8888:8888"
+
   audit-service:
     build:
       context: ./audit-service
       dockerfile: Dockerfile
     depends_on:
+      config-server:
+        condition: service_healthy
       audit-postgres:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: jdbc:postgresql://audit-postgres:5432/audit_db
+      CONFIG_SERVER_URL: http://config-server:8888
       DB_USERNAME: audit
       DB_PASSWORD: audit123
       JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006
@@ -68,14 +87,15 @@ services:
       context: ./permission-service
       dockerfile: Dockerfile
     depends_on:
+      config-server:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: jdbc:postgresql://postgres:5432/permissions_saas
+      CONFIG_SERVER_URL: http://config-server:8888
       DB_USERNAME: saas
       DB_PASSWORD: saas123
-      AUDIT_SERVICE_URL: http://audit-service:8081
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       JWT_SECRET: ${JWT_SECRET}
