@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Permission SaaS",
-    "description": "Colecao de requisicoes da API do Permission SaaS.\n\nOrdem sugerida: execute a pasta 'Fluxo completo' de cima para baixo — cada requisicao guarda em variaveis de colecao o que a proxima precisa (clientId, planId, apiKey, projectId).\n\nVariavel baseUrl: http://localhost:8080\n\nVariavel auditBaseUrl: http://localhost:8081 — usada pela pasta 'audit-service (8081)', que chama o servico extraido direto.\n\nPasta 'audit-service fora do ar': roteiro da demonstracao de indisponibilidade — pare o audit-service antes das requisicoes 1 e 2 e religue antes da 3.",
+    "description": "Colecao de requisicoes da API do Permission SaaS.\n\nOrdem sugerida: execute a pasta 'Fluxo completo' de cima para baixo — cada requisicao guarda em variaveis de colecao o que a proxima precisa (clientId, planId, apiKey, projectId).\n\nVariavel baseUrl: http://localhost:8080\n\nVariavel auditBaseUrl: http://localhost:8081 — usada pela pasta 'audit-service (8081)', que chama o servico extraido direto.\n\nVariavel configBaseUrl: http://localhost:8888 — usada pela pasta 'config-server (8888)', que mostra a configuracao centralizada.\n\nPasta 'audit-service fora do ar': roteiro da demonstracao de indisponibilidade — pare o audit-service antes das requisicoes 1 e 2 e religue antes da 3.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,6 +12,10 @@
     {
       "key": "auditBaseUrl",
       "value": "http://localhost:8081"
+    },
+    {
+      "key": "configBaseUrl",
+      "value": "http://localhost:8888"
     },
     {
       "key": "clientId",
@@ -2201,6 +2205,77 @@
               ]
             },
             "description": "Desde a requisicao 1, a trilha tem um unico evento: o da requisicao 4."
+          }
+        }
+      ]
+    },
+    {
+      "name": "config-server (8888)",
+      "description": "Configuracao centralizada servida pelo Config Server, a partir dos arquivos de config-repo/. Cada resposta lista as fontes (propertySources) que o servico recebe no profile prod, da mais especifica para a mais geral. Suba com: docker compose up -d --build. Para ver uma mudanca valer: edite um arquivo de config-repo/ e rode docker compose restart <servico>.",
+      "item": [
+        {
+          "name": "Configuracao da aplicacao principal (prod)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const sources = pm.response.json().propertySources;",
+                  "pm.test('fonte especifica da aplicacao principal', () => pm.expect(sources[0].name).to.include('permission-service-prod.yml'));",
+                  "pm.test('endereco do audit-service pela rede do Compose', () => pm.expect(sources[0].source['audit.service.url']).to.eql('http://audit-service:8081'));",
+                  "pm.test('sem senha na configuracao central', () => pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{configBaseUrl}}/permission-service/prod",
+              "host": [
+                "{{configBaseUrl}}"
+              ],
+              "path": [
+                "permission-service",
+                "prod"
+              ]
+            },
+            "description": "O que a aplicacao principal recebe no profile prod: endereco do banco e do audit-service (config-repo/permission-service-prod.yml) e o que vale para todos (config-repo/application-prod.yml)."
+          }
+        },
+        {
+          "name": "Configuracao do audit-service (prod)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const sources = pm.response.json().propertySources;",
+                  "pm.test('banco proprio do servico', () => pm.expect(sources[0].source['spring.datasource.url']).to.include('audit-postgres:5432/audit_db'));",
+                  "pm.test('arquivo compartilhado entre os servicos', () => pm.expect(sources.map(s => s.name).join()).to.include('application-prod.yml'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{configBaseUrl}}/audit-service/prod",
+              "host": [
+                "{{configBaseUrl}}"
+              ],
+              "path": [
+                "audit-service",
+                "prod"
+              ]
+            },
+            "description": "O que o audit-service recebe no profile prod: endereco do proprio banco (config-repo/audit-service-prod.yml) e o que vale para todos (config-repo/application-prod.yml)."
           }
         }
       ]
